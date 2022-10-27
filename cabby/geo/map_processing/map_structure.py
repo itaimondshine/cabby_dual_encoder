@@ -67,9 +67,12 @@ class Map:
       nx.set_edge_attributes(self.nx_graph, distance, 'true_length')
       
       logging.info("Add POI to graph.")
-      self.add_poi_to_graph()
+      print("here")
 
+      self.add_poi_to_graph()
       osmid = nx.get_node_attributes(self.nx_graph, 'osmid')
+      print("++++++++++++")
+
       osmid_str = dict(zip(osmid, map(str, osmid.values())))
       nx.set_node_attributes(self.nx_graph, osmid_str, 'osmid')
       nx.relabel_nodes(self.nx_graph, osmid_str, copy=False)
@@ -98,13 +101,13 @@ class Map:
     self.edges['osmid'] = self.edges['osmid'].apply(lambda x: str(x))
 
   def get_poi(self) -> Tuple[GeoSeries, GeoSeries]:
-    '''Extract point of interests (POI) for the defined region. 
+    '''Extract point of interests (POI) for the defined region.
     Returns:
       (1) The POI that are not roads; and (2) the roads POI.
     '''
 
     tags = osm.INTERESTING_TAGS
-              
+
     osm_poi = ox.geometries.geometries_from_polygon(self.polygon_area, tags=tags)
 
     if ('highway' in osm_poi.columns) and ('railway' in osm_poi.columns):
@@ -125,7 +128,7 @@ class Map:
     # Get centroid for POI.
     centroid_list = osm_without_large_areas['geometry'].apply(
       lambda x: x if isinstance(x, Point) else x.centroid).tolist()
-    
+
     osm_without_large_areas = osm_without_large_areas.assign(centroid=centroid_list)
 
     return osm_without_large_areas, osm_poi_streets
@@ -143,12 +146,12 @@ class Map:
     if self.num_poi_add%SHOW_PROGRESS_EVERY == 0:
       percentage_gen = round(100*self.num_poi_add/self.num_poi)
       logging.info(
-        f"Number of POI add to graph {self.num_poi_add}, " + 
+        f"Number of POI add to graph {self.num_poi_add}, " +
         f"that is {percentage_gen}% of the required POI addition.")
 
-    # If the POI is already in the graph, do not add it.
-    if single_poi['osmid'] in self.nx_graph:
-      return None
+    # # If the POI is already in the graph, do not add it.
+    # if single_poi['osmid'] in self.nx_graph:
+    #   return None
 
     # Project POI on to the closest edge in graph.
     geometry = single_poi['geometry']
@@ -172,18 +175,18 @@ class Map:
       sample_4 = Point(coords[int(3*n_points/4)])
       points = [sample_1, sample_2, sample_3, sample_4]
       points = points[0:4]
- 
+
 
     poi_osmid = single_poi['osmid']
     centroid_point = single_poi['centroid']
 
-    # POI_PREFIX indicates a POI added to the graph. 
-    poi_osmid = self.create_poi_id(poi_osmid) 
-    
+    # POI_PREFIX indicates a POI added to the graph.
+    poi_osmid = self.create_poi_id(poi_osmid)
+
     # If the POI is already in the graph, do not add it.
     if poi_osmid in self.nx_graph:
       return None
-    
+
     assert poi_osmid not in self.poi['osmid'].tolist(), poi_osmid
 
     list_edges_connected_ids = []
@@ -217,7 +220,7 @@ class Map:
       The new OSM id of the POI.
     '''
     return POI_PREFIX + str(poi_osmid)
-  
+
   def create_projected_poi_id(self, poi_osmid: str, list_projected: Sequence) -> str:
     '''Create a new OSM id for an added projected POI to graph.
     Arguments:
@@ -228,37 +231,37 @@ class Map:
     '''
     assert POI_PREFIX in poi_osmid
     len_list_projected = len(list_projected)
-    return str(len_list_projected) + poi_osmid 
+    return str(len_list_projected) + poi_osmid
 
   def add_single_point_edge(self, point_exterior: Point,
-                list_edges_connected_ids: List, 
+                list_edges_connected_ids: List,
                 poi_osmid: str,
                 centroid_point: Point) -> Optional[Sequence[edge.Edge]]:
-    '''Connect a POI to the closest edge: (1) claculate the projected point to 
-    the nearest edge; (2) add the projected node to the graph; (3) create an 
-    edge between the point of the POI and the projcted point (add to the list 
-    to be returned); (4) create two edges from the closest edge (u-v) and the 
-    projected point: (a) u-projected point; (b) v-projected point; (5) remove 
+    '''Connect a POI to the closest edge: (1) claculate the projected point to
+    the nearest edge; (2) add the projected node to the graph; (3) create an
+    edge between the point of the POI and the projcted point (add to the list
+    to be returned); (4) create two edges from the closest edge (u-v) and the
+    projected point: (a) u-projected point; (b) v-projected point; (5) remove
     closest edge u-v.
     Arguments:
-      point_exterior: a point on the exterior of a POI that will be projected 
+      point_exterior: a point on the exterior of a POI that will be projected
       on to the closest edge.
-      list_edges_connected_ids: list of edges ids already connected to the POI. 
-      If the current edge found is already connected it will avoid connecting 
+      list_edges_connected_ids: list of edges ids already connected to the POI.
+      If the current edge found is already connected it will avoid connecting
       it again.
       poi_osmid: the POI  id to be connected to the edge.
-      centroid_point: the centroid point of the POI that will be connected to 
+      centroid_point: the centroid point of the POI that will be connected to
       the edges.
     Returns:
-      The edges between the POI and the closest edge found to be added to the 
+      The edges between the POI and the closest edge found to be added to the
       graph.
     '''
 
     try:
-      
+
       near_edge_u, near_edge_v, near_edge_key, line = \
         ox.distance.get_nearest_edge(
-          self.nx_graph, util.tuple_from_point(point_exterior), return_geom=True, 
+          self.nx_graph, util.tuple_from_point(point_exterior), return_geom=True,
           )
 
     except Exception as e:
@@ -287,8 +290,8 @@ class Map:
 
     cut_geometry = util.cut(line,dist_projected)
 
-    n_lines = len(cut_geometry) 
-    
+    n_lines = len(cut_geometry)
+
     line_1 = cut_geometry[0]
     dist_1 = util.get_line_length(line_1)
 
@@ -320,7 +323,7 @@ class Map:
     projected_line_centroid = LineString([projected_point,centroid_point])
     projected_line_centroid_dist = util.get_linestring_distance(
       projected_line_centroid)
-    
+
     edge_to_add = edge.Edge.from_poi(
       u_for_edge=poi_osmid,
       v_for_edge=projected_point_osmid,
@@ -334,7 +337,7 @@ class Map:
 
     if n_lines==1:
       return edges_list
-    
+
     self.nx_graph.add_node(
       projected_point_osmid,
       highway=highway,
@@ -347,16 +350,16 @@ class Map:
     line_1_point_end = Point(line_1.coords[0])
     dist_u_1 = util.get_distance_between_points(u_point, line_1_point_end)
     dist_v_1 = util.get_distance_between_points(v_point, line_1_point_end)
-    
+
 
     if dist_u_1 < dist_v_1:
       dist_u = dist_1
-      line_u = line_1 
+      line_u = line_1
       dist_v = dist_2
       line_v = line_2
     else:
       dist_u = dist_2
-      line_u = line_2 
+      line_u = line_2
       dist_v = dist_1
       line_v = line_1
 
@@ -395,7 +398,7 @@ class Map:
       name=edge_add.name,
       highway=edge_add.highway,
       oneway=edge_add.oneway,
-      geometry=edge_add.geometry 
+      geometry=edge_add.geometry
     )
 
     self.nx_graph.add_edge(
@@ -407,20 +410,26 @@ class Map:
       name=edge_add.name,
       highway=edge_add.highway,
       oneway=edge_add.oneway,
-      geometry=edge_add.geometry 
+      geometry=edge_add.geometry
     )
 
   def add_poi_to_graph(self):
     '''Add all POI to nx_graph(currently contains only the roads).'''
     self.num_poi = self.poi.shape[0]
     logging.info(f"Number of POI to add to graph: {self.num_poi}")
+
+
+
+    self.poi = self.poi.reset_index()
     edges_to_add_list = self.poi.apply(self.add_single_poi_to_graph, axis=1)
+
     edges_to_add_list = edges_to_add_list.dropna()
+
     edges_to_add_list.swifter.apply(
       lambda edges_list: [self.add_two_ways_edges(edge) for edge in edges_list])
 
   def get_s2cellids_for_poi(self, geometry: Any) -> Optional[Sequence[int]]:
-    '''get cellids for POI. 
+    '''get cellids for POI.
     Arguments:
       geometry: The geometry to which a cellids will be retrived.
     Returns:
@@ -505,6 +514,8 @@ class Map:
 
     # Load POI.
     path = self.get_valid_path(dir_name, '_poi', '.pkl')
+
+    print("got here")
     self.poi = load_poi(path)
 
     # Load streets.

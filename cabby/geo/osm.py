@@ -24,19 +24,19 @@ CORRECTIONS = {'fuel': 'gas station', 'parking': 'parking lot',
   'supermarket shop': 'supermarket', 'toys shop': 'toy shop', 
   'fast food': 'fast food restaurant', 'Medical Center shop': 'Medical Center'}
 
-BLOCK_LIST = ['place of worship']
+BLOCK_LIST = []
 
 TOURISM_INTERESTING = [
-  'aquarium', 'gallery', 'guest_house', 'hostel', 'hotel',
-  'motel','museum', 'picnic_site', 'theme_park', 'viewpoint', 
+  'aquarium', 'gallery', 'guest_house', 'hostel', 'hotel', 'fountain' 'pub', 'cafe', 'atm', 'artwork',
+  'motel','museum', 'picnic_site', 'theme_park', 'viewpoint',
   'zoo', 'attraction']
-           
-LEISURE_INTERESTING = ['dog_park', 'fitness_centre', 'garden', 'golfcourse', 
-  'ice_rink', 'marina', 'miniature_golf', 'park', 'playground', 'stadium', 
+
+LEISURE_INTERESTING = ['dog_park', 'fitness_centre', 'garden', 'golfcourse', 'fast_food', 'fitness_station', 'pitch'
+  'ice_rink', 'marina', 'miniature_golf', 'park', 'playground', 'stadium', 'museum', 'Culture Palace', 'בית כנסת'
   'water_park', 'track', 'pitch']
 
-BUILDING_INTERESTING = ['hotel', 'supermarket', 'warehouse', 'cathedral', 
-  'chapel', 'church', 'mosque', 'synagogue', 'hospital', 'kindergarten', 
+BUILDING_INTERESTING = ['hotel', 'supermarket', 'warehouse', 'cathedral',
+  'chapel', 'church', 'mosque', 'synagogue', 'hospital', 'kindergarten', 'driving_school',
   'school', 'university', 'train_station', 'stadium', 'bridge']
 
 CRAFT_INTERESTING = ['bakery']

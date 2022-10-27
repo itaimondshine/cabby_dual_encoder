@@ -19,14 +19,13 @@ from cabby.geo.map_processing import map_structure
 from cabby.geo import regions
 
 
-
 class MapTest(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
 
     # Process the map for an area in D.C.
-    cls.map = map_structure.Map(regions.get_region('DC'), 18)
+    cls.map = map_structure.Map(regions.get_region('TelAvivSmall'), 18)
 
   def testPOIInGraph(self):
     osmids = self.map.poi['osmid'].tolist()
