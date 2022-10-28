@@ -21,7 +21,7 @@ echo "****************************************"
 
 #bazel-bin/cabby/geo/map_processing/map_processor --region $REGION_NAME --min_s2_level 18 --directory $OUTPUT_DIR
 
-bazel-bin/cabby/geo/sample_poi --region $REGION_NAME --min_s2_level 18 --directory $MAP_DIR --path $MAP_DIR/JerusalemSmall.gpkg --n_samples 50
+bazel-bin/cabby/geo/sample_poi --region $REGION_NAME --min_s2_level 18 --directory $MAP_DIR --path $MAP_DIR/JerusalemSmall.gpkg --n_samples 4
 
 #echo "****************************************"
 #echo "*                 RVS                  *"

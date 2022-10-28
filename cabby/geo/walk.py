@@ -15,7 +15,7 @@
 '''Library to support sampling points, creating routes between them and pivots
 along the path and near the goal.'''
 
-from typing import Sequence, Optional, Dict, Any
+from typing import Sequence, Optional, Dict, Any, List
 
 from absl import logging
 import geopandas as gpd
@@ -54,6 +54,7 @@ MAX_PATH_DIST = 2000
 MIN_PATH_DIST = 200
 NEAR_PIVOT_DIST = 80
 ON_PIVOT_DIST = 10
+NUMBER_OF_AROUND_PILOTS = 10
 
 # The max number of failed tries to generate a single path entities.
 MAX_NUM_GEN_FAILED = 10
@@ -458,16 +459,6 @@ class Walker:
 
     return prominent_poi
 
-  def get_street_name(self, end_point: Dict) -> str:
-    '''Return the street name of the end_point.
-    Arguments:
-      end_point: The goal location.
-    Returns:
-      The street name.
-    '''
-
-
-    pass
 
 
 
@@ -487,14 +478,19 @@ class Walker:
       A single landmark.
     '''
 
+
+
     # Get pivot along the goal location.
 
     # Get pivot near the goal location.
     near_pivot = self.get_pivot_near_goal(
       end_point=end_point, max_distance_from_goal=NEAR_PIVOT_DIST, min_distance_from_goal=2)
 
+    list_of_streets = self.get_street_name(end_point)
+
     if near_pivot['geometry'] is None:
       return None
+
 
     list_around_goal_pivots_osmid = [near_pivot['osmid']]
     list_around_goal_pivots = []
@@ -515,6 +511,11 @@ class Walker:
     # for pivot in list_pivots:
     #   if ce
     #
+    #   print(pivot['geometry'].centroid.x, pivot['geometry'].centroid.y)
+
+    #
+    # for landmark in list_pivots:
+    #     landmark['street'] = "stam"
 
     return list_pivots
 
@@ -551,6 +552,28 @@ class Walker:
 
     return "left"
 
+  def get_street_name(self, end_point: Dict) -> List[str]:
+    '''Return the street name of the end_point.
+    Arguments:
+      end_point: The goal location.
+    Returns:
+      The street name.
+    '''
+
+    end_point_osm = end_point['osmid'].lstrip('#')
+
+    literal_streets = self.map.edges[~self.map.edges['name'].isin(['', 'poi'])]
+    valid_streets = literal_streets[literal_streets['name'].notnull()]
+
+    filtered_df = valid_streets[valid_streets['u'].str.endswith(end_point_osm) |
+                              valid_streets['v'].str.endswith(end_point_osm)]
+
+    filtered_df_no_duplicates = filtered_df.drop_duplicates(subset=['osmid'])
+    list_of_streets = [filtered_df_no_duplicates['name'][index] for index in filtered_df_no_duplicates.index]
+
+    return list_of_streets
+
+
   def get_sample(self) -> Optional[geo_item.GeoEntity]:
 
     '''Sample start and end point, a pivot landmark and route.
@@ -559,19 +582,33 @@ class Walker:
     '''
 
     geo_landmarks = {}
+    geo_features = {}
+
     # Select end point.
     geo_landmarks['end_point'] = self.get_end_poi()
+
+
     if geo_landmarks['end_point'] is None:
       return None
+    # else:
+    #   geo_landmarks['street'] = ["stam"]
 
     # Select pivots.
     result = self.get_pivots(
       geo_landmarks['end_point'])
     if result is None:
       return None
+    #
+    # for landmark in result:
+    #   try:
+    #     landmark['street'] = ["stam"]
+    #   except AttributeError:
+    #     continue
+
 
     for landmark in result:
       try:
+        # landmark['street'] = ["stam"]
         landmark.geometry = landmark.centroid
       except AttributeError:
         continue
@@ -579,19 +616,25 @@ class Walker:
 
 
 
-
     geo_landmarks['near_pivot'] = result[0]
 
 
-
-    for i in range(1, len(result)):
+    for i in range(1, NUMBER_OF_AROUND_PILOTS):
       geo_landmarks[f'around_goal_pivot_{i}'] = result[i]
 
-    geo_features = {}
+
+
+
+
+
+
 
     # Get Egocentric spatial relation from goal.
 
     # Get Egocentric spatial relation from main pivot.
+
+    # Get number of intersections between main pivot and goal location.
+    # geo_landmarks['street'] = ["stam"]
 
     # Get number of intersections between main pivot and goal location.
 
@@ -599,6 +642,9 @@ class Walker:
       route=None,
       geo_features=geo_features,
       geo_landmarks=geo_landmarks)
+
+
+
 
     return rvs_path_entity
 
@@ -667,7 +713,8 @@ class Walker:
       geo_item.save(new_entities, path_rvs_path)
       new_entities = []
     if len(new_entities) > 0:
-      print(type(new_entities))
+
+
       geo_item.save(new_entities, path_rvs_path)
 
 
@@ -691,6 +738,8 @@ def load_entities(path: str) -> Sequence[geo_item.GeoEntity]:
     features = geo_types_all['path_features'].iloc[row_idx].to_dict()
     del features['geometry']
     route = geo_types_all['route'].iloc[row_idx]
+
+
 
     geo_item_cur = geo_item.GeoEntity.add_entity(
       geo_landmarks=landmarks,
