@@ -459,13 +459,6 @@ class Walker:
 
     return prominent_poi
 
-
-
-
-
-
-
-
   def get_pivots(self,
                  end_point: Dict
                  ) -> Optional[Sequence[GeoSeries]]:
@@ -478,8 +471,6 @@ class Walker:
       A single landmark.
     '''
 
-
-
     # Get pivot along the goal location.
 
     # Get pivot near the goal location.
@@ -490,7 +481,6 @@ class Walker:
 
     if near_pivot['geometry'] is None:
       return None
-
 
     list_around_goal_pivots_osmid = [near_pivot['osmid']]
     list_around_goal_pivots = []
@@ -566,13 +556,152 @@ class Walker:
     valid_streets = literal_streets[literal_streets['name'].notnull()]
 
     filtered_df = valid_streets[valid_streets['u'].str.endswith(end_point_osm) |
-                              valid_streets['v'].str.endswith(end_point_osm)]
+                                valid_streets['v'].str.endswith(end_point_osm)]
 
     filtered_df_no_duplicates = filtered_df.drop_duplicates(subset=['osmid'])
     list_of_streets = [filtered_df_no_duplicates['name'][index] for index in filtered_df_no_duplicates.index]
 
     return list_of_streets
 
+  def get_cardinal_direction(self, ref_point: Point, end_point: Point
+                             ) -> str:
+    """Calculate the cardinal direction between pivot point and and end point.
+    Arguments:
+      ref_point: The starting point.
+      end_point: The end point.
+    Returns:
+      A cardinal direction.
+    """
+    azim = util.get_bearing(ref_point.geometry, end_point.geometry)
+    if azim < 10 or azim > 350:
+      cardinal = 'צפון'
+    elif azim < 80:
+      cardinal = 'צפון מזרח'
+    elif azim > 280:
+      cardinal = 'צפון מערב'
+    elif azim < 100:
+      cardinal = 'מזרח'
+    elif azim < 170:
+      cardinal = 'דרום מזרח'
+    elif azim < 190:
+      cardinal = 'דרום'
+    elif azim < 260:
+      cardinal = 'דרום מערב'
+    else:  # azim < 280:
+      cardinal = 'מערב'
+    return cardinal
+
+  def get_position_goal(self,
+                        end_point: GeoSeries
+                        # route: GeoDataFrame
+                        ) -> Optional[str]:
+    '''Return the position of the goal in the last block:
+    middle of the block\ near the closest intersection\ near the farther intersection
+    Arguments:
+      end_point: The goal location.
+      route: The route along which a landmark will be chosen.
+    Returns:
+      The position of the goal in last block. '''
+
+    print(self.get_street_name(end_point))
+    print(self.get_street_name(end_point))
+    street_name = self.gestreet_name = self.get_street_name(end_point)[0]
+
+    street_id = self.street_name_to_id(street_name)  # Todo - change to street id
+
+    intersections_nodes = self.get_intersections_nodes(street=street_id)
+
+    # Find the Edges of the Street
+
+    point_x, point_y = self.get_edges_nodes(intersections_nodes)
+    intersections_nodes = [point_x, point_y]
+    #
+    if len(intersections_nodes)> 0:
+      return None
+    import pdb; pdb.set_trace()
+
+    #
+    # import ipdb; ipdb.set_trace()
+    #
+    # distances = intersections_nodes.apply(
+    #   lambda x: util.get_distance_between_geometries(x.geometry, end_point.centroid), axis=1)
+    # intersections_nodes.insert(0, "distances", distances, True)
+    #
+    # bearing = intersections_nodes.apply(
+    #   lambda x: util.get_bearing(x.geometry.centroid, end_point.centroid), axis=1)
+    # intersections_nodes.insert(0, "bearing", bearing, True)
+    # #
+
+
+
+
+    # min_distance_idx = intersections_nodes['distances'].idxmin()
+    # bearing = intersections_nodes['bearing'].loc[min_distance_idx]
+    # distance_closest = intersections_nodes['distances'].loc[min_distance_idx]
+    #
+    # point_closest = intersections_nodes.loc[min_distance_idx]
+    #
+    # # Get second bearing in opposite direction.
+    # opposite_bearing = (bearing + 180) % 360
+    # intersection_opposite = intersections_nodes[(intersections_nodes['bearing'] - opposite_bearing) % 360 < 50]
+    #
+    #
+    #
+    # if intersection_opposite.shape[0] == 0:
+    #   return None
+    #
+    # intersection_opposite_idx = intersection_opposite['distances'].idxmin()
+    # intersection_opposite_distance = intersection_opposite.loc[intersection_opposite_idx]['distances']
+    #
+    # point_far = intersection_opposite.loc[intersection_opposite_idx]
+    #
+    # cardinal = self.get_cardinal_direction(point_far, point_closest)
+    #
+    # # Check the proportions.
+    # total_distance = intersection_opposite_distance + distance_closest
+    # closest_propotion = distance_closest / total_distance
+    #
+    # if closest_propotion > 0.4:
+    #   return "middle_block"
+    #
+    # if closest_propotion > 0.3:
+    #   return None
+    #
+    # # Check to which intersection it is closer.
+    # closest_inter_node_osmid = intersections_nodes.loc[min_distance_idx]['osmid']
+    # print(closest_inter_node_osmid)
+    #
+    # return "first_intersection" + cardinal
+    # # if closest_inter_node_osmid in route['osmid'].tolist():
+    # #   return "first_intersection;" + cardinal
+    # #
+    # # return "second_intersection;" + cardinal
+
+  def street_name_to_id(self, street_name: str) -> str:
+    return self.map.edges[self.map.edges['name'] == street_name]['osmid'].to_list()[0]
+
+  def get_intersections_nodes(self, street):
+    map_new = self.map
+    nodes_on_street = map_new.edges[map_new.edges['osmid'] == street]['u']
+    condition_intersection = map_new.edges['osmid'] != street
+    condition_not_poi = map_new.edges['name'] != 'poi'
+    streets_intersection = map_new.edges[
+      condition_not_poi & condition_intersection & map_new.edges['u'].isin(nodes_on_street)]
+    intersections_nodes_osmid = streets_intersection['u']
+    intersections_nodes = map_new.nodes[map_new.nodes['osmid'].isin(intersections_nodes_osmid)]
+    return intersections_nodes
+
+  def get_edges_nodes(self, res):
+    ex = []
+    for i in range(len(res)):
+      for j in range(len(res)):
+        ans = {'dis': res.geometry[i].distance(res.geometry[j]), 'point_x': res.geometry[i],
+               'point_y': res.geometry[j]}
+        ex.append(ans)
+        ex = sorted(ex, key=lambda item: item['dis'])
+        point_x = ex[-1]['point_x']
+        point_y = ex[-1]['point_y']
+    return point_x, point_y
 
   def get_sample(self) -> Optional[geo_item.GeoEntity]:
 
@@ -588,10 +717,18 @@ class Walker:
     geo_landmarks['end_point'] = self.get_end_poi()
 
 
+
+    list_of_streets = self.get_street_name(geo_landmarks['end_point'])
+    streets = ','.join(map(str, list_of_streets))
+
+    if len(list_of_streets) > 0:
+      print(""""getting the position of end point""")
+      position = self.get_position_goal(geo_landmarks['end_point'])
+      print(f"""position is {position}""")
+
+    geo_landmarks['end_point']['street'] = streets if len(list_of_streets) > 0 else None
     if geo_landmarks['end_point'] is None:
       return None
-    # else:
-    #   geo_landmarks['street'] = ["stam"]
 
     # Select pivots.
     result = self.get_pivots(
@@ -605,29 +742,23 @@ class Walker:
     #   except AttributeError:
     #     continue
 
-
     for landmark in result:
       try:
-        # landmark['street'] = ["stam"]
         landmark.geometry = landmark.centroid
+        cardinal = self.get_cardinal_direction(ref_point=landmark, end_point=geo_landmarks['end_point'])
+        landmark['cardinal'] = cardinal
+        list_of_streets = self.get_street_name(landmark)
+        streets = ','.join(map(str, list_of_streets))
+        landmark['street'] = streets if len(list_of_streets) > 0 else None
+        # print(cardinal)
+
       except AttributeError:
         continue
 
-
-
-
     geo_landmarks['near_pivot'] = result[0]
-
 
     for i in range(1, NUMBER_OF_AROUND_PILOTS):
       geo_landmarks[f'around_goal_pivot_{i}'] = result[i]
-
-
-
-
-
-
-
 
     # Get Egocentric spatial relation from goal.
 
@@ -642,9 +773,6 @@ class Walker:
       route=None,
       geo_features=geo_features,
       geo_landmarks=geo_landmarks)
-
-
-
 
     return rvs_path_entity
 
@@ -668,7 +796,7 @@ class Walker:
       if attempt >= MAX_NUM_GEN_FAILED:
         sys.exit(f"Reached max number of failed attempts for sample {index}.")
       entity = self.get_sample()
-      print(entity)
+
       attempt += 1
 
     logging.info(f"Created sample {index}/{n_samples}.")
@@ -698,7 +826,7 @@ class Walker:
     return_dict = manager.dict()
 
     for i in range(n_samples):
-        self.get_single_sample(i, sema, n_samples, return_dict)
+      self.get_single_sample(i, sema, n_samples, return_dict)
     # p = multiprocessing.Process(
     #         target=self.get_single_sample,
     #         args=(i+1, sema ,n_samples,
@@ -713,8 +841,6 @@ class Walker:
       geo_item.save(new_entities, path_rvs_path)
       new_entities = []
     if len(new_entities) > 0:
-
-
       geo_item.save(new_entities, path_rvs_path)
 
 
@@ -738,8 +864,6 @@ def load_entities(path: str) -> Sequence[geo_item.GeoEntity]:
     features = geo_types_all['path_features'].iloc[row_idx].to_dict()
     del features['geometry']
     route = geo_types_all['route'].iloc[row_idx]
-
-
 
     geo_item_cur = geo_item.GeoEntity.add_entity(
       geo_landmarks=landmarks,

@@ -19,7 +19,7 @@ from networkx.algorithms import hierarchy
 CORRECTIONS = {'fuel': 'gas station', 'parking': 'parking lot', 
   'taxi': 'taxi stand', 'doctors': 'doctor\'s office', 
   'dentist': 'dentist\'s office', 'gambling': 'gambling place', 
-  'police': 'police station', 'shower': 'public bath', 
+  'police': 'police station', 'shower': 'public bath',
   'mall shop': 'mall', 'general shop': 'shop', 
   'supermarket shop': 'supermarket', 'toys shop': 'toy shop', 
   'fast food': 'fast food restaurant', 'Medical Center shop': 'Medical Center'}
@@ -35,9 +35,9 @@ LEISURE_INTERESTING = ['dog_park', 'fitness_centre', 'garden', 'golfcourse', 'fa
   'ice_rink', 'marina', 'miniature_golf', 'park', 'playground', 'stadium', 'museum', 'Culture Palace', 'בית כנסת'
   'water_park', 'track', 'pitch']
 
-BUILDING_INTERESTING = ['hotel', 'supermarket', 'warehouse', 'cathedral',
+BUILDING_INTERESTING = ['hotel', 'supermarket', 'warehouse', 'cathedral', 'building'
   'chapel', 'church', 'mosque', 'synagogue', 'hospital', 'kindergarten', 'driving_school',
-  'school', 'university', 'train_station', 'stadium', 'bridge']
+  'school', 'university', 'train_station', 'stadium', 'bridge', 'police', 'wayside_shrine']
 
 CRAFT_INTERESTING = ['bakery']
 
@@ -66,7 +66,7 @@ NON_SPECIFIC_TAGS = {'amenity': False, 'brand': False, 'shop': 'after',
 
 
 PROMINENT_TAGS_ORDERED = [
-  'wikipedia', 'wikidata', 'brand', 'tourism', 'tourism','amenity', 'shop', 'leisure']
+  'wikipedia', 'wikidata', 'brand', 'tourism', 'tourism','amenity', 'shop', 'leisure', 'cardinal', 'street']
 
 NEGLIGIBLE_AMENITY = [
   'bicycle_parking', 'drinking_water', 'picnic_site', 'bicycle_rental',
