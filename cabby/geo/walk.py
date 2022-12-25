@@ -42,6 +42,8 @@ from cabby.geo.map_processing import map_structure
 from cabby.geo import geo_item
 from cabby.geo import osm
 
+
+
 SMALL_POI = 4  # Less than 4 S2Cellids.
 
 SEED = 1
@@ -477,7 +479,7 @@ class Walker:
     near_pivot = self.get_pivot_near_goal(
       end_point=end_point, max_distance_from_goal=NEAR_PIVOT_DIST, min_distance_from_goal=2)
 
-    list_of_streets = self.get_street_name(end_point)
+    list_of_streets = self.get_street_name_and_id(end_point)
 
     if near_pivot['geometry'] is None:
       return None
@@ -542,7 +544,7 @@ class Walker:
 
     return "left"
 
-  def get_street_name(self, end_point: Dict) -> List[str]:
+  def get_street_name_and_id(self, end_point: Dict) -> List[str]:
     '''Return the street name of the end_point.
     Arguments:
       end_point: The goal location.
@@ -560,8 +562,8 @@ class Walker:
 
     filtered_df_no_duplicates = filtered_df.drop_duplicates(subset=['osmid'])
     list_of_streets = [filtered_df_no_duplicates['name'][index] for index in filtered_df_no_duplicates.index]
-
-    return list_of_streets
+    list_of_osmids = [filtered_df_no_duplicates['osmid'][index] for index in filtered_df_no_duplicates.index]
+    return list_of_streets, list_of_osmids
 
   def get_cardinal_direction(self, ref_point: Point, end_point: Point
                              ) -> str:
@@ -603,79 +605,59 @@ class Walker:
     Returns:
       The position of the goal in last block. '''
 
-    print(self.get_street_name(end_point))
-    print(self.get_street_name(end_point))
-    street_name = self.gestreet_name = self.get_street_name(end_point)[0]
+    s_names, s_ids = self.get_street_name_and_id(end_point)
+    try:
+      street_id = s_ids[0]
+      intersections_nodes = self.get_intersections_nodes(street=street_id)
+      if intersections_nodes.shape[0] != 0:
+           point_x, point_y = self.get_edges_nodes(intersections_nodes)
+           edges_nodes = [point_x, point_y]
+           intersections_nodes = intersections_nodes[intersections_nodes['geometry'].isin(edges_nodes)]
 
-    street_id = self.street_name_to_id(street_name)  # Todo - change to street id
+           if intersections_nodes.shape[0] == 0:
+                return None
 
-    intersections_nodes = self.get_intersections_nodes(street=street_id)
+            distances = intersections_nodes.apply(
+            lambda x: util.get_distance_between_geometries(x.geometry, end_point.centroid), axis=1)
+            intersections_nodes.insert(0, "distances", distances, True)
 
-    # Find the Edges of the Street
+    bearing = intersections_nodes.apply(
+      lambda x: util.get_bearing(x.geometry.centroid, end_point.centroid), axis=1)
+    intersections_nodes.insert(0, "bearing", bearing, True)
+    min_distance_idx = intersections_nodes['distances'].idxmin()
+    bearing = intersections_nodes['bearing'].loc[min_distance_idx]
+    distance_closest = intersections_nodes['distances'].loc[min_distance_idx]
 
-    point_x, point_y = self.get_edges_nodes(intersections_nodes)
-    intersections_nodes = [point_x, point_y]
-    #
-    if len(intersections_nodes)> 0:
+    point_closest = intersections_nodes.loc[min_distance_idx]
+
+    # Get second bearing in opposite direction.
+    opposite_bearing = (bearing + 180) % 360
+    intersection_opposite = intersections_nodes[(intersections_nodes['bearing'] - opposite_bearing) % 360 < 30]
+
+    if intersection_opposite.shape[0] == 0:
       return None
-    import pdb; pdb.set_trace()
 
-    #
-    # import ipdb; ipdb.set_trace()
-    #
-    # distances = intersections_nodes.apply(
-    #   lambda x: util.get_distance_between_geometries(x.geometry, end_point.centroid), axis=1)
-    # intersections_nodes.insert(0, "distances", distances, True)
-    #
-    # bearing = intersections_nodes.apply(
-    #   lambda x: util.get_bearing(x.geometry.centroid, end_point.centroid), axis=1)
-    # intersections_nodes.insert(0, "bearing", bearing, True)
-    # #
+    intersection_opposite_idx = intersection_opposite['distances'].idxmin()
+    intersection_opposite_distance = intersection_opposite.loc[intersection_opposite_idx]['distances']
+
+    point_far = intersection_opposite.loc[intersection_opposite_idx]
+
+    cardinal = self.get_cardinal_direction(end_point.geometry, point_closest)
+
+    # Check the proportions.
+    total_distance = intersection_opposite_distance + distance_closest
+    closest_propotion = distance_closest / total_distance
 
 
 
 
-    # min_distance_idx = intersections_nodes['distances'].idxmin()
-    # bearing = intersections_nodes['bearing'].loc[min_distance_idx]
-    # distance_closest = intersections_nodes['distances'].loc[min_distance_idx]
-    #
-    # point_closest = intersections_nodes.loc[min_distance_idx]
-    #
-    # # Get second bearing in opposite direction.
-    # opposite_bearing = (bearing + 180) % 360
-    # intersection_opposite = intersections_nodes[(intersections_nodes['bearing'] - opposite_bearing) % 360 < 50]
-    #
-    #
-    #
-    # if intersection_opposite.shape[0] == 0:
-    #   return None
-    #
-    # intersection_opposite_idx = intersection_opposite['distances'].idxmin()
-    # intersection_opposite_distance = intersection_opposite.loc[intersection_opposite_idx]['distances']
-    #
-    # point_far = intersection_opposite.loc[intersection_opposite_idx]
-    #
-    # cardinal = self.get_cardinal_direction(point_far, point_closest)
-    #
-    # # Check the proportions.
-    # total_distance = intersection_opposite_distance + distance_closest
-    # closest_propotion = distance_closest / total_distance
-    #
-    # if closest_propotion > 0.4:
-    #   return "middle_block"
-    #
-    # if closest_propotion > 0.3:
-    #   return None
-    #
-    # # Check to which intersection it is closer.
-    # closest_inter_node_osmid = intersections_nodes.loc[min_distance_idx]['osmid']
-    # print(closest_inter_node_osmid)
-    #
-    # return "first_intersection" + cardinal
-    # # if closest_inter_node_osmid in route['osmid'].tolist():
-    # #   return "first_intersection;" + cardinal
-    # #
-    # # return "second_intersection;" + cardinal
+    if closest_propotion > 0.5:
+      return "middle_block"
+
+    if closest_propotion < 0.3:
+      return "upper-block"
+
+    return "second_intersection;" + cardinal
 
   def street_name_to_id(self, street_name: str) -> str:
     return self.map.edges[self.map.edges['name'] == street_name]['osmid'].to_list()[0]
@@ -686,7 +668,8 @@ class Walker:
     condition_intersection = map_new.edges['osmid'] != street
     condition_not_poi = map_new.edges['name'] != 'poi'
     streets_intersection = map_new.edges[
-      condition_not_poi & condition_intersection & map_new.edges['u'].isin(nodes_on_street)]
+      condition_not_poi & condition_intersection & map_new.edges['u'].isin(nodes_on_street) | map_new.edges['v'].isin(
+        nodes_on_street)]
     intersections_nodes_osmid = streets_intersection['u']
     intersections_nodes = map_new.nodes[map_new.nodes['osmid'].isin(intersections_nodes_osmid)]
     return intersections_nodes
@@ -716,9 +699,7 @@ class Walker:
     # Select end point.
     geo_landmarks['end_point'] = self.get_end_poi()
 
-
-
-    list_of_streets = self.get_street_name(geo_landmarks['end_point'])
+    list_of_streets = self.get_street_name_and_id(geo_landmarks['end_point'])
     streets = ','.join(map(str, list_of_streets))
 
     if len(list_of_streets) > 0:
@@ -747,7 +728,7 @@ class Walker:
         landmark.geometry = landmark.centroid
         cardinal = self.get_cardinal_direction(ref_point=landmark, end_point=geo_landmarks['end_point'])
         landmark['cardinal'] = cardinal
-        list_of_streets = self.get_street_name(landmark)
+        list_of_streets = self.get_street_name_and_id(landmark)
         streets = ','.join(map(str, list_of_streets))
         landmark['street'] = streets if len(list_of_streets) > 0 else None
         # print(cardinal)

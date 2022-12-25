@@ -29,14 +29,15 @@ class GeoSetTest(unittest.TestCase):
 
   def testEmbeddingGraph(self):
 
-    map_name = 'RUN-map1'
+    map_name = 'Tel Aviv'
 
     map = map_structure.Map(regions.get_region(map_name), 14)
+
+    print(map)
 
     current_dir = os.getcwd()
 
     map.write_map(current_dir)
-
 
     graph = utils.construct_metagraph(region=regions.get_region(map_name),
                                       s2_level=14,
@@ -44,6 +45,8 @@ class GeoSetTest(unittest.TestCase):
                                       base_osm_map_filepath=current_dir,
                                       )
 
+
+    print(graph)
     # Precompute probabilities and generate walks
 
     node2vec = Node2Vec(
@@ -68,4 +71,5 @@ class GeoSetTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
+
   unittest.main()

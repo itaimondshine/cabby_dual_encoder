@@ -51,7 +51,7 @@ SUPPORTED_REGIONS = [
   ),
   Region(
     name='Haifa',
-    polygon=box(minx=34.9499666, miny=32.7579523, maxx=35.0797443, maxy=32.8427003)
+    polygon=box(minx=34.9499666, miny=32.7579523, maxx=35.0797443, maxy=32.8427003, ccw=True)
   ),
   Region(
     name='DC',
@@ -68,13 +68,12 @@ SUPPORTED_REGIONS = [
   ),
   Region(
     name='Tel Aviv',
-    polygon=box(minx=34.739131, miny=32.0293437, maxx=-34.8522617, maxy=32.1469766)
+    polygon=box(minx=34.739131, miny=32.0293437, maxx=34.8038, maxy=32.093)
   ),
   Region(
     name='Jerusalem',
     polygon=box(minx=35.0852011, miny=31.7096214, maxx=-35.2650457, maxy=31.8826655)
   ),
-
 
   Region(
     name='TelAvivSmall',

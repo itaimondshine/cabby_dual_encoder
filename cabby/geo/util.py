@@ -79,7 +79,6 @@ def far_cellid(
   return far_cell_found
 
 
-
 def neighbor_cellid(cellid: int, celllist: Optional[List[int]]) -> int:
   '''Get a neighbor cell id.
   Arguments:
@@ -105,17 +104,19 @@ def neighbor_cellid(cellid: int, celllist: Optional[List[int]]) -> int:
       if cell_n.id() in celllist:
         neighbor_cell = cell_n.id()
         break
-    checked +=four_neighbors
+    checked += four_neighbors
     four_neighbors = list(
       set([cell.next() for cell in four_neighbors] + [cell.prev() for cell in four_neighbors]
-          + [cell.GetEdgeNeighbors()[2] for cell in four_neighbors] + [cell.GetEdgeNeighbors()[1] for cell in four_neighbors]))
+          + [cell.GetEdgeNeighbors()[2] for cell in four_neighbors] + [cell.GetEdgeNeighbors()[1] for cell in
+                                                                       four_neighbors]))
 
   checked_hex = list(set([hex(cell.id()) for cell in checked]))
 
+  if neighbor_cell is not None:
+    return neighbor_cell
 
-
-  assert neighbor_cell, f"Didn't find neighbor for cell {cellid} "
-  return neighbor_cell
+  else:
+    return cellid
 
 
 def cellids_from_s2cellids(list_s2cells: Sequence[s2.S2CellId]) -> Sequence[int]:

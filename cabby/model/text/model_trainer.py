@@ -57,207 +57,119 @@ from cabby.model import datasets
 from cabby.model import util
 from cabby.geo import regions
 
-TASKS = ["WikiGeo", "RVS", "RUN", "human"]
+# Configure parameters.
 
-FLAGS = flags.FLAGS
-
-flags.DEFINE_string("data_dir", None,
-                    "The directory from which to load the dataset.")
-
-flags.DEFINE_string("dataset_dir", None,
-                    "The directory to save\load dataloader.")
-
-flags.DEFINE_enum(
-  "region", None, regions.SUPPORTED_REGION_NAMES,
-  regions.REGION_SUPPORT_MESSAGE)
-
-flags.DEFINE_enum(
-  "task", "WikiGeo", TASKS,
-  f"Supported datasets to train\evaluate on: {','.join(TASKS)}. ")
-
-flags.DEFINE_enum(
-  "model", "Dual-Encoder-Bert", datasets.MODELS,
-  f"Supported models to train\evaluate on:  {','.join(datasets.MODELS)}.")
-
-flags.DEFINE_integer("s2_level", None, "S2 level of the S2Cells.")
-
-flags.DEFINE_string("output_dir", None,
-                    "The directory where the model and results will be save to.")
-
-flags.DEFINE_float(
-  'learning_rate', default=5e-5,
-  help=('The learning rate for the Adam optimizer.'))
-
-flags.DEFINE_string("model_path", None,
-                    "A path of a model the model to be fine tuned\ evaluated.")
-
-flags.DEFINE_string("graph_embed_path", default="",
-                    help="The path to the graph embedding.")
-
-flags.DEFINE_integer(
-  'train_batch_size', default=4,
-  help=('Batch size for training.'))
-
-flags.DEFINE_integer(
-  'test_batch_size', default=4,
-  help=('Batch size for testing and validating.'))
-
-flags.DEFINE_integer(
-  'num_epochs', default=5,
-  help=('Number of training epochs.'))
-
-flags.DEFINE_integer(
-  'n_fixed_points', default=4,
-  help=('In case model is S2-Generation-T5-Warmup-start-end pick number of fixed points to generate.'))
-
-flags.DEFINE_integer(
-  'far_distance_threshold', default=2000,
-  help=('Used when sampling far cells.' +
-        'A far cell is defined be a minimum distance (in meters) from a certain cell.'))
-
-flags.DEFINE_bool(
-  'infer_only', default=False,
-  help=('Train and infer\ just infer.'))
-
-flags.DEFINE_bool(
-  'is_single_sample_train', default=False,
-  help=('Train on a single sample and do not evaluate.'))
-
-flags.DEFINE_bool(
-  'is_val_loss_from_model', default=False,
-  help=('In case the model is loaded - should the validation loss use the models current loss.'))
-
-flags.DEFINE_bool(
-  'is_distance_distribution', default=False,
-  help=(
-    'Add probability over cells according to the distance from start point.' +
-    'This is optional only for RVS and RUN.'))
-
-# Required flags.
-flags.mark_flag_as_required("data_dir")
-flags.mark_flag_as_required("dataset_dir")
-flags.mark_flag_as_required("region")
-flags.mark_flag_as_required("s2_level")
+DATA_DIR = '/home/nlp/itaimond1/caby/cabby/model/text/dataSamples/human'
+DATASET_DIR = '/home/nlp/itaimond1/caby/cabby/model/text/dataset_dir'
+REGION = 'Tel Aviv'
+S2_LEVEL = '14'
+MODEL = 'Dual-Encoder-Bert'
+GRAPH_EMBEDDING = ''
+INFER_ONLY = False
+TRAIN_BATCH_SIZE = 32
+TEST_BATCH_SIZE = 32
+DEV_BATCH_SIZE = 32
+MODEL_PATH = ''
+LEARNING_RATE = 0.01
+NUM_EPOCHS = 1
+OUTPUT_DIR = '/home/nlp/itaimond1/caby/cabby/model/text/dataset_dir/output'
 
 
-def main(argv):
-  if not os.path.exists(FLAGS.dataset_dir):
-    sys.exit("Dataset path doesn't exist: {}.".format(FLAGS.dataset_dir))
+def main():
+  print("Start training")
 
-  dataset_model_path = os.path.join(FLAGS.dataset_dir, str(FLAGS.model))
-  dataset_path = os.path.join(dataset_model_path, str(FLAGS.s2_level))
+  if not os.path.exists(DATASET_DIR):
+    sys.exit("Dataset path doesn't exist: {}.".format(DATASET_DIR))
 
-
-
-  assert FLAGS.task in TASKS
-  if FLAGS.task == "RVS":
-    dataset_init = datasets.RVSDataset
-  elif FLAGS.task == 'RUN':
-    dataset_init = datasets.RUNDataset
-  elif FLAGS.task == 'human':
-    dataset_init = datasets.HumanDataset
-  else:
-    sys.exit("Dataset invalid")
-
-  if FLAGS.is_single_sample_train:
-    FLAGS.train_batch_size = 1
-
+  dataset_model_path = os.path.join(DATASET_DIR, MODEL)
+  dataset_path = os.path.join(dataset_model_path, str(S2_LEVEL))
+  dataset_init = datasets.HumanDataset
 
   if os.path.exists(dataset_path):
     dataset_text = dataset_item.TextGeoDataset.load(
-      dataset_dir=FLAGS.dataset_dir,
-      model_type=str(FLAGS.model),
-      s2_level=FLAGS.s2_level
+      dataset_dir=DATASET_DIR,
+      model_type=str(MODEL),
+      s2_level=S2_LEVEL
     )
 
   else:
     dataset = dataset_init(
-      data_dir=FLAGS.data_dir,
-      region=FLAGS.region,
-      s2level=FLAGS.s2_level,
-      model_type=FLAGS.model,
-      n_fixed_points=FLAGS.n_fixed_points,
-      graph_embed_path=FLAGS.graph_embed_path)
+      data_dir=DATA_DIR,
+      region=REGION,
+      s2level=int(S2_LEVEL),
+      model_type=MODEL,
+      n_fixed_points=4,
+      graph_embed_path=GRAPH_EMBEDDING)
 
     if not os.path.exists(dataset_model_path):
       os.mkdir(dataset_model_path)
-    logging.info("Preparing data.")
+
+    print("Preprocessing dataset")
     dataset_text = dataset.create_dataset(
-      infer_only=FLAGS.infer_only,
-      is_dist=FLAGS.is_distance_distribution,
-      far_cell_dist=FLAGS.far_distance_threshold
+      infer_only=INFER_ONLY,
+      is_dist=False,
+      far_cell_dist=2000,
     )
+
+    print(f'dataset_text: {dataset_item}')
+
+
 
     dataset_item.TextGeoDataset.save(
       dataset_text=dataset_text,
       dataset_path=dataset_path,
       graph_embed_size=dataset.graph_embed_size)
 
+
+  print(f'dataset_item: {dataset_text}')
   n_cells = len(dataset_text.unique_cellids)
-  logging.info("Number of unique cells: {}".format(
-    n_cells))
+
   train_loader = None
   valid_loader = None
-  if FLAGS.infer_only == False:
+  if not INFER_ONLY:
     train_loader = DataLoader(
-      dataset_text.train, batch_size=FLAGS.train_batch_size, shuffle=True)
+      dataset_text.train, batch_size=TRAIN_BATCH_SIZE, shuffle=True)
     valid_loader = DataLoader(
-      dataset_text.valid, batch_size=FLAGS.test_batch_size, shuffle=False)
-  test_loader = DataLoader(
-    dataset_text.test, batch_size=FLAGS.test_batch_size, shuffle=False)
+      dataset_text.valid, batch_size=TEST_BATCH_SIZE, shuffle=False)
+    test_loader = DataLoader(
+      dataset_text.test, batch_size=DEV_BATCH_SIZE, shuffle=False)
 
-  device = torch.device(
-    'cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-  logging.info(f"Using model: {FLAGS.model}")
-  if 'Dual-Encoder' in FLAGS.model:
-    run_model = models.DualEncoder(
-      device=device, is_distance_distribution=FLAGS.is_distance_distribution)
-  elif 'T5' in FLAGS.model:
-    run_model = models.S2GenerationModel(
-      dataset_text.coord_to_cellid, device=device, model_type=FLAGS.model,
-      vq_dim=dataset_text.graph_embed_size)
-  elif FLAGS.model == 'Classification-Bert':
-    run_model = models.ClassificationModel(n_cells, device=device)
+
+  device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+  if 'Dual-Encoder' in MODEL:
+    run_model = models.DualEncoder(device=device, is_distance_distribution=False)
   else:
-    sys.exit("Model invalid")
+    run_model = models.ClassificationModel(n_cells, device=device)
 
-  if FLAGS.model_path is not None:
-    if not os.path.exists(FLAGS.model_path):
-      sys.exit(f"The model's path does not exists: {FLAGS.model_path}")
-    util.load_checkpoint(
-      load_path=FLAGS.model_path, model=run_model, device=device)
+  # if MODEL_PATH is not None:
+  #   if not os.path.exists(MODEL_PATH):
+  #     sys.exit(f"The model's path does not exists: {MODEL_PATH}")
+  #   util.load_checkpoint(
+  #     load_path=MODEL_PATH, model=run_model, device=device)
   if torch.cuda.device_count() > 1:
-    logging.info("Using {} GPUs.".format(torch.cuda.device_count()))
     run_model = nn.DataParallel(run_model).module
 
   run_model.to(device)
 
-  optimizer = torch.optim.Adam(
-    run_model.parameters(), lr=FLAGS.learning_rate)
-
-  if FLAGS.is_distance_distribution and FLAGS.task == 'WikiGeo':
-    sys.exit("Wikigeo does not have a distance distribution option.")
-
-  if not FLAGS.is_val_loss_from_model:
-    run_model.best_valid_loss = float("Inf")
+  optimizer = torch.optim.Adam(run_model.parameters(), lr=LEARNING_RATE)
 
   trainer = train.Trainer(
     model=run_model,
     device=device,
-    num_epochs=FLAGS.num_epochs,
+    num_epochs=NUM_EPOCHS,
     optimizer=optimizer,
     train_loader=train_loader,
     valid_loader=valid_loader,
     test_loader=test_loader,
     unique_cells=dataset_text.unique_cellids,
-    file_path=FLAGS.output_dir,
+    file_path=OUTPUT_DIR,
     cells_tensor=dataset_text.unique_cellids_binary,
     label_to_cellid=dataset_text.label_to_cellid,
-    best_valid_loss=run_model.best_valid_loss,
-    is_single_sample_train=FLAGS.is_single_sample_train
+    is_single_sample_train=False,
   )
-  if FLAGS.infer_only:
+  if INFER_ONLY:
     logging.info("Starting to infer model.")
     valid_loss, predictions, true_vals, true_points, pred_points = (
       trainer.evaluate(validation_set=False))
@@ -277,4 +189,4 @@ def main(argv):
 
 
 if __name__ == '__main__':
-  app.run(main)
+  main()

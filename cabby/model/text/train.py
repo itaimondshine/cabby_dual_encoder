@@ -60,12 +60,12 @@ class Trainer:
     self.label_to_cellid = label_to_cellid
     self.cos = nn.CosineSimilarity(dim=2)
     self.best_valid_loss = best_valid_loss
-    if not os.path.exists(self.file_path):
-      os.mkdir(self.file_path)
-    self.model_path = os.path.join(self.file_path, 'model.pt')
-    self.metrics_path = os.path.join(self.file_path, 'metrics.tsv')
+    # if not os.path.exists(self.file_path):
+    # os.mkdir(self.file_path)
+    # self.model_path = os.path.join(self.file_path, 'model.pt')
+    # self.metrics_path = os.path.join(self.file_path, 'metrics.tsv')
     self.is_single_sample_train = is_single_sample_train
-    self.evaluator = eu.Evaluator()
+    # self.evaluator = eu.Evaluator()
 
   def evaluate(self, validation_set: bool = True):
     '''Validate the model.'''
@@ -94,26 +94,32 @@ class Trainer:
         if batch_idx == 0:
           is_print = True
         batch = {k: v.to(self.device) for k, v in batch.items() if torch.is_tensor(v)}
+        labels = self.train_loader.dataset.labels[batch_idx * 100: batch_idx * 100 + 100]
 
         loss = self.model(
           text,
           cellids,
           is_print,
-          batch
+          labels
         )
 
         loss_val_total += loss.item()
-
+        print(f'before the predictions {text}, {self.cells_tensor}, {self.label_to_cellid}, {batch}')
         predictions = self.model.predict(
           text, is_print, self.cells_tensor, self.label_to_cellid, batch)
-
+        print(f'predictions in evaluation step: {predictions}')
         predictions_list.append(predictions)
         labels = batch['label'].cpu()
+        print(f'labels in evaluation step: {labels}')
         true_vals.append(labels)
         true_points_list.append(batch['end_point'].cpu())
 
+
+
     true_points_list = np.concatenate(true_points_list, axis=0)
+    print(f'true_points_list: {true_points_list}')
     pred_points_list = np.concatenate(predictions_list, axis=0)
+    print(f'pred_points_list: {pred_points_list}')
     true_vals = np.concatenate(true_vals, axis=0)
     average_valid_loss = loss_val_total / len(data_loader)
 
@@ -128,19 +134,24 @@ class Trainer:
 
     # Training loop.
     self.model.train()
-
     for epoch in range(self.num_epochs):
       running_loss = 0.0
+
       logging.info("Epoch number: {}".format(epoch))
       for batch_idx, batch in enumerate(self.train_loader):
+        print(batch_idx)
         self.optimizer.zero_grad()
         text = {key: val.to(self.device) for key, val in batch['text'].items()}
+
         cellids = batch['cellid'].float().to(self.device)
         batch = {k: v.to(self.device) for k, v in batch.items() if torch.is_tensor(v)}
+        # labels = self.train_loader.dataset.labels[batch_idx * 100 : batch_idx * 100 + 100]
+
         is_print = False
         if epoch == 0 and batch_idx == 0:
           is_print = True
-
+        import pdb; pdb.set_trace()
+        print(batch)
         loss = self.model(
           text,
           cellids,
@@ -148,13 +159,14 @@ class Trainer:
           batch,
         )
 
+
+        print("loss in train loader: {}".format(loss))
         loss.backward()
         # ensure_shared_grads(self.model)
         self.optimizer.step()
 
         # Update running values.
         running_loss += loss.item()
-
         global_step += 1
 
         if self.is_single_sample_train:
@@ -231,6 +243,7 @@ class Trainer:
           text = {key: val.to(self.device) for key, val in batch['text'].items()}
           cellids = batch['cellid'].float().to(self.device)
           batch = {k: v.to(self.device) for k, v in batch.items() if torch.is_tensor(v)}
+
 
           loss += self.model(
             text,

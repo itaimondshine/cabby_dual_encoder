@@ -31,7 +31,7 @@ from cabby.geo import regions
 from cabby.geo import util as gutil
 from cabby.model import dataset_item
 from cabby.model import util
-from transformers import DistilBertTokenizerFast, T5Tokenizer
+from transformers import DistilBertTokenizerFast, T5Tokenizer, BertForSequenceClassification, BertTokenizerFast
 
 MODELS = [
   'Dual-Encoder-Bert',
@@ -53,9 +53,9 @@ MODELS = [
 ]
 
 T5_TYPE = "t5-small"
-BERT_TYPE = 'distilbert-base-uncased'
+BERT_TYPE = 'onlplab/alephbert-base'
 
-FAR_DISTANCE_THRESHOLD = 2000 # Minimum distance between far cells in meters.
+FAR_DISTANCE_THRESHOLD = 2000  # Minimum distance between far cells in meters.
 
 # DISTRIBUTION_SCALE_DISTANCEA is a factor (in meters) that gives the overall
 # scale in meters for the distribution.
@@ -103,11 +103,8 @@ class Dataset:
   def set_tokenizers(self):
     assert self.model_type in MODELS
     if self.model_type in ['Dual-Encoder-Bert', 'Classification-Bert']:
-      self.text_tokenizer = DistilBertTokenizerFast.from_pretrained(BERT_TYPE)
+      self.text_tokenizer = BertTokenizerFast.from_pretrained(BERT_TYPE)
       self.s2_tokenizer = util.binary_representation
-    elif 'T5' in self.model_type:
-      self.text_tokenizer = tokenizerT5
-      self.s2_tokenizer = self.tokenize_cell
 
   def tokenize_cell(self, list_cells):
     if isinstance(list_cells[0], list):
@@ -125,63 +122,40 @@ class Dataset:
     return tokenizerT5(
       labels, padding=True, truncation=True).input_ids
 
-  def process_route(self, row):
-    route_str = row.route
-    route_str = route_str.replace('LINESTRING', "").replace('(', "").replace(')', "")
-    landmarks_str_list = route_str.split(',')
 
-    route = [
-      gutil.point_from_str_coord_xy(landmark_str) for landmark_str in reversed(landmarks_str_list)]
 
-    route.insert(0, row['end_point'])
 
-    assert route[0] == row['end_point'], f"end: {row['end_point']} route: {route[0]} - {route[-1]}"
-    return route
+  def get_cells_embedding(self, cells: list) -> torch.Tensor:
+    EMBEDDING_PATH = '/home/nlp/itaimond1/caby/cells_embedding_tel_aviv.npy'
+    cell_id_to_vector = np.load(EMBEDDING_PATH, allow_pickle=True).item()
+    vecs = []
+    for _id in cells:
+      if str(_id) not in cell_id_to_vector:
 
-  def process_landmarks(self, row):
-    points = [row['end_point'], row['near_pivot'], row['main_pivot'], row['start_point']]
+        vecs.append(np.zeros(10))
+      else:
+        print(_id)
+        vecs.append(cell_id_to_vector[str(_id)])
+    return torch.tensor(vecs)
 
-    assert points[0] == row['end_point']
-    return points
 
-  def get_specific_landmark(self, landmarks_str_one_line, landmark_name):
 
-    landmarks_str_list = landmarks_str_one_line.split(';')
-
-    landmark_found = None
-    for landmark_str in reversed(landmarks_str_list):
-      if landmark_name in landmark_str:
-        landmark_found = gutil.point_from_str_coord_yx(landmark_str.split(':')[-1])
-
-    return landmark_found
 
   def create_dataset(
+
     self, infer_only: bool = False, is_dist: bool = False,
     far_cell_dist: int = FAR_DISTANCE_THRESHOLD
-                     ) -> dataset_item.TextGeoDataset:
+  ) -> dataset_item.TextGeoDataset:
     '''Loads data and creates datasets and train, validate and test sets.
     Returns:
       The train, validate and test sets and the dictionary of labels to cellids.
     '''
 
     points = gutil.get_centers_from_s2cellids(self.unique_cellid)
+    unique_cells_df = pd.DataFrame({'point': points, 'cellid': self.unique_cellid})
+    self.cellid_to_coord, self.coord_to_cellid = {}, {}
 
-    unique_cells_df = pd.DataFrame(
-      {'point': points, 'cellid': self.unique_cellid})
-
-    self.cellid_to_coord, self.coord_to_cellid = self.create_grid(unique_cells_df)
-
-    logging.info(f"Created grid")
-    dist_matrix = unique_cells_df.point.mapply(
-      lambda x: calc_dist(x, unique_cells_df)
-    )
-    dist_matrix = dist_matrix.to_numpy()
-
-    unique_cells_df['far'] = unique_cells_df.point.swifter.apply(
-      lambda x: gutil.far_cellid(x, unique_cells_df, far_cell_dist))
-
-    vec_cells = self.s2_tokenizer(unique_cells_df.cellid.tolist())
-    tens_cells = torch.tensor(vec_cells)
+    tens_cells = self.get_cells_embedding(unique_cells_df.cellid.tolist())
 
     # Create RUN dataset.
     train_dataset = None
@@ -195,7 +169,6 @@ class Dataset:
         self.cellid_to_label, self.model_type,
         dprob, self.cellid_to_coord,
         is_dist=is_dist,
-        dist_matrix=dist_matrix,
         graph_embed_file=self.graph_embed_file)
       logging.info(
         f"Finished to create the train-set with {len(train_dataset)} samples")
@@ -206,7 +179,6 @@ class Dataset:
         self.cellid_to_label, self.model_type,
         dprob, self.cellid_to_coord,
         is_dist=is_dist,
-        dist_matrix=dist_matrix,
         graph_embed_file=self.graph_embed_file)
       logging.info(
         f"Finished to create the valid-set with {len(val_dataset)} samples")
@@ -217,7 +189,6 @@ class Dataset:
       self.cellid_to_label, self.model_type,
       dprob, self.cellid_to_coord,
       is_dist=is_dist,
-      dist_matrix=dist_matrix,
       graph_embed_file=self.graph_embed_file)
     logging.info(
       f"Finished to create the test-set with {len(test_dataset)} samples")
@@ -226,156 +197,6 @@ class Dataset:
       train_dataset, val_dataset, test_dataset,
       np.array(self.unique_cellid),
       tens_cells, self.label_to_cellid, self.coord_to_cellid, self.graph_embed_size)
-
-  def create_grid(self, unique_cells_df):
-
-    unique_cells_df['lon'] = unique_cells_df.point.apply(lambda p: p.x)
-    unique_cells_df['lat'] = unique_cells_df.point.apply(lambda p: p.y)
-
-    unique_cells_df = unique_cells_df.sort_values(by=['lat', 'lon'], ascending=True)
-
-    cellid_to_coord = {}
-    coord_to_cellid = {}
-
-    full_cellid_list = unique_cells_df.cellid.tolist()
-    empty_cellid_list = []
-
-    x_current = 0
-    y_current = 0
-
-    current_cellid = unique_cells_df.cellid.tolist()[0]
-    size_region = len(unique_cells_df)
-    min_cell = current_cellid
-    tmp = []
-    begin_cell = None
-
-    for down_idx in range(20):
-      cell = s2.S2CellId(current_cellid)
-      down_cell = cell.GetEdgeNeighbors()[1]
-      current_cellid = down_cell.id()
-
-    for up_idx in range(20):
-      cell = s2.S2CellId(current_cellid)
-      up_cell = cell.GetEdgeNeighbors()[3]
-      current_cellid = up_cell.id()
-
-      for left_idx in range(round(size_region/20)):
-        cell = s2.S2CellId(current_cellid)
-        left_cell = cell.GetEdgeNeighbors()[0]
-        left_cell_id = left_cell.id()
-        current_cellid = left_cell_id
-        if current_cellid in full_cellid_list:
-          begin_cell = current_cellid
-
-      if begin_cell:
-        break
-
-      for right_idx in range(round(size_region/20)):
-        cell = s2.S2CellId(current_cellid)
-        right_cell = cell.GetEdgeNeighbors()[2]
-        right_cell_id = right_cell.id()
-        current_cellid = right_cell_id
-        if current_cellid in full_cellid_list:
-          begin_cell = current_cellid
-          break
-
-      if begin_cell:
-        break
-
-    current_cellid = begin_cell
-
-    status_cell_list = (len(full_cellid_list), 0)
-
-    while True:
-      cell = s2.S2CellId(current_cellid)
-      next_cell = cell.GetEdgeNeighbors()[2]
-      next_cellid = next_cell.id()
-
-
-      is_next = False
-
-      if current_cellid in full_cellid_list:
-        cellid_to_coord[current_cellid] = (x_current, y_current)
-
-        full_cellid_list.remove(current_cellid)
-        empty_cellid_list.append(current_cellid)
-
-        status_cell_list = (len(full_cellid_list), 0)
-        x_current += 1
-        current_cellid = next_cellid
-        is_next = True
-
-      if not is_next:
-        y_current += 1
-
-        upper_cell = cell.GetEdgeNeighbors()[3]
-        current_cellid = upper_cell.id()
-        prev_cell = upper_cell.GetEdgeNeighbors()[0]
-        prev_cell_id = prev_cell.id()
-
-        counter_move_left = 0
-        while prev_cell_id in full_cellid_list and counter_move_left<size_region:
-          counter_move_left += 1
-          cell = s2.S2CellId(current_cellid)
-          prev_cell = cell.GetEdgeNeighbors()[0]
-          prev_cell_id = prev_cell.id()
-          current_cellid = prev_cell_id
-          x_current -= 1
-
-        for i in range(round(size_region/10)):
-          cell = s2.S2CellId(current_cellid)
-          prev_cell = cell.GetEdgeNeighbors()[0]
-          prev_cell_id = prev_cell.id()
-          current_cellid = prev_cell_id
-          x_current -= 1
-
-        counter_move_right = 0
-        while current_cellid not in full_cellid_list and counter_move_right<size_region:
-          counter_move_right += 1
-          cell = s2.S2CellId(current_cellid)
-          next_cell = cell.GetEdgeNeighbors()[2]
-          next_cell_id = next_cell.id()
-          current_cellid = next_cell_id
-          x_current += 1
-
-      size_cell_list = len(full_cellid_list)
-      if size_cell_list == 0:
-        break
-
-      if size_cell_list==status_cell_list[0]:
-        status_cell_list = (size_cell_list, status_cell_list[1]+1)
-
-      if status_cell_list[1]>100:
-        sys.exit(f"Problem with creating grid. " +
-                 f"There are still {size_cell_list} cells not in grid: {full_cellid_list}. " +
-                 f"The beginig cell: {begin_cell}")
-
-    min_x = min(cellid_to_coord.items(), key=lambda x: x[1][0])[1][0]
-
-    if min_x < 0:
-
-      add_x = -1 * min_x
-      new_cellid_to_coord = {}
-      for cellid, (x, y) in cellid_to_coord.items():
-
-        new_x = x + add_x
-        new_cellid_to_coord[cellid] = (new_x, y)
-
-      cellid_to_coord = new_cellid_to_coord
-
-    min_x = min(cellid_to_coord.items(), key=lambda x: x[1][0])[1][0]
-    min_y = min(cellid_to_coord.items(), key=lambda x: x[1][1])[1][1]
-
-    assert min_x >= 0 and min_y >= 0
-
-    coord_format_to_cellid = {dataset_item.coord_format(coord): cellid for cellid, coord in cellid_to_coord.items()}
-    cellid_to_coord_format = {cellid: dataset_item.coord_format(coord) for cellid, coord in cellid_to_coord.items()}
-
-    assert len(
-      full_cellid_list) == 0, f"full_cellid_list: {len(full_cellid_list)} empty_cellid_list:{len(empty_cellid_list)}"
-    assert len(cellid_to_coord_format) == unique_cells_df.cellid.shape[0]
-
-    return cellid_to_coord_format, coord_format_to_cellid
 
   def get_fixed_point_along_route(self, row):
     points_list = row.route
@@ -409,7 +230,6 @@ class HumanDataset(Dataset):
     self.valid = self.load_data(data_dir, 'dev', lines=True)
     self.test = self.load_data(data_dir, 'test', lines=True)
 
-    # Get labels.
     active_region = regions.get_region(region)
     unique_cellid = gutil.cellids_from_polygon(active_region.polygon, s2level)
     label_to_cellid = {idx: cellid for idx, cellid in enumerate(unique_cellid)}
@@ -424,11 +244,9 @@ class HumanDataset(Dataset):
     ds_path = os.path.join(data_dir, ds_set + '.json')
     assert os.path.exists(ds_path), f"{ds_path} doesn't exsits"
 
-    ds = pd.read_json(ds_path, lines=lines)
+    ds = pd.read_json(ds_path, lines=True)
     ds['instructions'] = ds['content']
-    ds['end_point'] = ds['rvs_goal_point'].apply(gutil.point_from_str_coord_xy)
-    ds['start_point'] = ds['rvs_start_point'].apply(gutil.point_from_str_coord_xy)
-
+    ds['end_point'] = ds['goal_point'].apply(gutil.point_from_str_coord_xy)
     if 'landmarks' in ds:
       ds['near_pivot'] = ds.landmarks.apply(
         lambda x: self.get_specific_landmark(x, 'near_pivot'))
@@ -436,10 +254,6 @@ class HumanDataset(Dataset):
         lambda x: self.get_specific_landmark(x, 'main_pivot'))
 
       ds['landmarks'] = ds.apply(self.process_landmarks, axis=1)
-
-    if 'route' in ds:
-      ds['route'] = ds.apply(self.process_route, axis=1)
-      ds['route_fixed'] = ds.apply(self.get_fixed_point_along_route, axis=1)
 
       ds['start_end'] = ds.apply(self.get_fixed_point_along_route, axis=1)
 
@@ -523,7 +337,7 @@ class RVSDataset(Dataset):
     n_fixed_points: int = 4,
     graph_embed_path: str = "",
     model_type: str = "Dual-Encoder-Bert"
-    ):
+  ):
     Dataset.__init__(
       self, data_dir, s2level, region, model_type, n_fixed_points, graph_embed_path)
     train_ds = self.load_data(data_dir, 'train', True)
@@ -626,6 +440,7 @@ class RVSDataset(Dataset):
       gutil.point_from_list_coord_xy(landmark) for landmark in reversed(route_list)]
     assert route[0] == end_point
     return route
+
 
 def calc_dist(start, unique_cells_df):
   dists = unique_cells_df.apply(
