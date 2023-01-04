@@ -30,7 +30,7 @@ from cabby.geo import util as gutil
 
 T5_TYPE = "t5-small"
 T5_DIM = 512 if T5_TYPE == "t5-small" else 768
-BERT_TYPE = 'onlplab/alephbert-base'
+BERT_TYPE = 'bert-base-multilingual-cased'
 N_TOKEN = 1024
 
 criterion = nn.CosineEmbeddingLoss()
@@ -59,24 +59,24 @@ class DualEncoder(GeneralModel):
     device,
     text_dim=768,
     hidden_dim=200,
-    s2cell_dim=64,
+    s2cell_dim=10,
     output_dim=100,
     is_distance_distribution=False
   ):
     GeneralModel.__init__(self, device)
 
-    self.hidden_layer = nn.Linear(text_dim, hidden_dim)
+
     self.softmax = nn.Softmax(dim=-1)
     self.tanh = nn.Tanh()
     self.relu = nn.ReLU()
     self.is_distance_distribution = is_distance_distribution
     self.model = BertModel.from_pretrained(
-      BERT_TYPE, return_dict=True)
+      BERT_TYPE)
 
     self.text_main = nn.Sequential(
-      nn.Linear(text_dim, hidden_dim),
-      nn.ReLU(),
-      nn.Linear(hidden_dim, output_dim),
+      nn.Linear(text_dim, output_dim)
+      # nn.ReLU(),
+      # nn.Linear(hidden_dim, output_dim),
     )
     self.cellid_main = nn.Sequential(
       nn.Linear(s2cell_dim, output_dim),
@@ -85,6 +85,8 @@ class DualEncoder(GeneralModel):
 
   def get_dual_encoding(self, text_tokens, cell_embedding):
     text_embedding = self.text_embed(text_tokens)
+
+    cell_embedding = cell_embedding.to(torch.float32)
     cellid_embedding = self.cellid_main(cell_embedding)
     return text_embedding.shape[0], text_embedding, cellid_embedding
 
@@ -94,13 +96,14 @@ class DualEncoder(GeneralModel):
     return torch.tensor(cell_id_to_vector[cellid])
 
   def predict(self, text_tokens, is_print, all_cells_embedding, *args):
-    batch = args[1]
 
-    batch_dim, text_embedding_exp, cellid_embedding = self.get_dual_encoding(text_tokens, all_cells_embedding)
+    batch_dim, text_embedding, cellid_embedding = self.get_dual_encoding(text_tokens, all_cells_embedding)
+
     cell_dim = cellid_embedding.shape[0]
     output_dim = cellid_embedding.shape[1]
 
-    text_embedding_exp = text_embedding_exp.unsqueeze(1).expand(batch_dim, cell_dim, output_dim)
+    text_embedding_exp = text_embedding.unsqueeze(1).expand(batch_dim, cell_dim, output_dim)
+
     cellid_embedding_exp = cellid_embedding.expand(batch_dim, cell_dim, output_dim)
 
     label_to_cellid = args[0]
@@ -109,30 +112,27 @@ class DualEncoder(GeneralModel):
 
     output = output.detach().cpu().numpy()
     predictions = np.argmax(output, axis=1)
-
+    print("____________________________________")
+    print(predictions)
     points = mutil.predictions_to_points(predictions, label_to_cellid)
     return points
 
   def forward(self, text, cellid, is_print, *args):
 
-    import pdb; pdb.set_trace()
-
     batch = args[0]
-    print(text)
-    print(cellid)
-    print(batch)
+
     neighbor_cells = batch['neighbor_cells']
     far_cells = batch['far_cells']
-    cellid[0]
+
+
     # Correct cellid.
 
     target = torch.ones(cellid.shape[0]).to(self.device)
     _, text_embedding, cellid_embedding = self.get_dual_encoding(text, cellid)
     loss_cellid = criterion(text_embedding, cellid_embedding, target)
 
-
-
     # Neighbor cellid.
+
     target_neighbor = -1 * torch.ones(cellid.shape[0]).to(self.device)
     _, text_embedding_neighbor, cellid_embedding = self.get_dual_encoding(text, neighbor_cells)
     loss_neighbor = criterion(text_embedding_neighbor,
@@ -142,14 +142,14 @@ class DualEncoder(GeneralModel):
     target_far = -1 * torch.ones(cellid.shape[0]).to(self.device)
     _, text_embedding_far, cellid_embedding = self.get_dual_encoding(text, far_cells)
     loss_far = criterion(text_embedding_far, cellid_embedding, target_far)
-
+    # print("loss_far", loss_far)
     loss = loss_cellid + loss_neighbor + loss_far
 
     return loss.mean()
 
   def text_embed(self, text):
+    # model = BertModel.from_pretrained("bert-base-multilingual-cased")
     outputs = self.model(**text)
-    # Check if exists in Aleph Bert
     cls_token = outputs.last_hidden_state[:, -1, :]
     return self.text_main(cls_token)
 

@@ -60,12 +60,12 @@ class Trainer:
     self.label_to_cellid = label_to_cellid
     self.cos = nn.CosineSimilarity(dim=2)
     self.best_valid_loss = best_valid_loss
-    # if not os.path.exists(self.file_path):
-    # os.mkdir(self.file_path)
-    # self.model_path = os.path.join(self.file_path, 'model.pt')
-    # self.metrics_path = os.path.join(self.file_path, 'metrics.tsv')
+    if not os.path.exists(self.file_path):
+      os.mkdir(self.file_path)
+    self.model_path = os.path.join(self.file_path, 'model.pt')
+    self.metrics_path = os.path.join(self.file_path, 'metrics_new.tsv')
     self.is_single_sample_train = is_single_sample_train
-    # self.evaluator = eu.Evaluator()
+    self.evaluator = eu.Evaluator()
 
   def evaluate(self, validation_set: bool = True):
     '''Validate the model.'''
@@ -82,7 +82,7 @@ class Trainer:
     correct = 0
     total = 0
     loss_val_total = 0
-
+    print("Starting evaluatn.")
     self.model.eval()
 
     with torch.no_grad():
@@ -100,26 +100,24 @@ class Trainer:
           text,
           cellids,
           is_print,
-          labels
+          batch
         )
 
         loss_val_total += loss.item()
-        print(f'before the predictions {text}, {self.cells_tensor}, {self.label_to_cellid}, {batch}')
+        # print(f'before the predictions {text}, {cellids}, {self.label_to_cellid}, {batch}')
         predictions = self.model.predict(
           text, is_print, self.cells_tensor, self.label_to_cellid, batch)
-        print(f'predictions in evaluation step: {predictions}')
+        # print(f'predictions in evaluation step: {predictions}')
         predictions_list.append(predictions)
-        labels = batch['label'].cpu()
-        print(f'labels in evaluation step: {labels}')
+        labels = labels
+        # print(f'labels in evaluation step: {labels}')
         true_vals.append(labels)
         true_points_list.append(batch['end_point'].cpu())
 
-
-
     true_points_list = np.concatenate(true_points_list, axis=0)
-    print(f'true_points_list: {true_points_list}')
+    # print(f'true_points_list: {true_points_list}')
     pred_points_list = np.concatenate(predictions_list, axis=0)
-    print(f'pred_points_list: {pred_points_list}')
+    # print(f'pred_points_list: {pred_points_list}')
     true_vals = np.concatenate(true_vals, axis=0)
     average_valid_loss = loss_val_total / len(data_loader)
 
@@ -139,7 +137,7 @@ class Trainer:
 
       logging.info("Epoch number: {}".format(epoch))
       for batch_idx, batch in enumerate(self.train_loader):
-        print(batch_idx)
+
         self.optimizer.zero_grad()
         text = {key: val.to(self.device) for key, val in batch['text'].items()}
 
@@ -150,17 +148,15 @@ class Trainer:
         is_print = False
         if epoch == 0 and batch_idx == 0:
           is_print = True
-        import pdb; pdb.set_trace()
-        print(batch)
+
         loss = self.model(
           text,
           cellids,
           is_print,
-          batch,
+          batch
         )
 
-
-        print("loss in train loader: {}".format(loss))
+        print(f'loss: {loss}')
         loss.backward()
         # ensure_shared_grads(self.model)
         self.optimizer.step()
@@ -169,21 +165,23 @@ class Trainer:
         running_loss += loss.item()
         global_step += 1
 
-        if self.is_single_sample_train:
-          break
+
 
       # Evaluation step.
+
+      print("Starting evaluation.")
       valid_loss, predictions, true_vals, true_points, pred_points = self.evaluate()
 
       average_train_loss = running_loss / (batch_idx + 1)
 
+      print(average_train_loss)
       # Resetting running values.
       running_loss = 0.0
-      logging.info('Epoch [{}/{}], Step [{}/{}], \
+      print('Epoch [{}/{}], Step [{}/{}], \
           Train Loss: {:.4f}, Valid Loss: {:.4f}'
-                   .format(epoch + 1, self.num_epochs, global_step,
-                           self.num_epochs * len(self.train_loader),
-                           average_train_loss, valid_loss))
+            .format(epoch + 1, self.num_epochs, global_step,
+                    self.num_epochs * len(self.train_loader),
+                    average_train_loss, valid_loss))
 
       # Save model and results in checkpoint.
       if self.best_valid_loss > valid_loss:
@@ -192,18 +190,11 @@ class Trainer:
 
       self.model.train()
 
-      if self.is_single_sample_train:
-        return
-
-    logging.info('Finished Training.')
-
+    print("Finished training, Starting evaluation of test set.")
     model_state = util.load_checkpoint(self.model_path, self.model, self.device)
     valid_loss = model_state['valid_loss']
 
-    logging.info(
-      f'Loaded best model (with validation loss {valid_loss}) for testing.')
-
-    logging.info('Start testing.')
+    print(f'Loaded best model (with validation loss {valid_loss}) for testing.')
 
     test_loss, predictions, true_vals, true_points, pred_points = self.evaluate(
       validation_set=False)
@@ -237,13 +228,12 @@ class Trainer:
 
         loss = torch.tensor([0.0]).to(self.device)
         self.optimizer.zero_grad()
-        for batch_idx, model_type in zip(range(len(self.train_loader)),model_types):
+        for batch_idx, model_type in zip(range(len(self.train_loader)), model_types):
           self.model_type = model_type
           batch = batches[batch_idx]
           text = {key: val.to(self.device) for key, val in batch['text'].items()}
           cellids = batch['cellid'].float().to(self.device)
           batch = {k: v.to(self.device) for k, v in batch.items() if torch.is_tensor(v)}
-
 
           loss += self.model(
             text,
@@ -266,14 +256,15 @@ class Trainer:
 
       average_train_loss = running_loss / (batch_idx + 1)
 
+      print(average_train_loss)
       # Resetting running values.
       running_loss = 0.0
 
-      logging.info('Epoch [{}/{}], Step [{}/{}], \
+      print('Epoch [{}/{}], Step [{}/{}], \
           Train Loss: {:.4f}, Valid Loss: {:.4f}'
-                   .format(epoch + 1, self.num_epochs, global_step,
-                           self.num_epochs * len(self.train_loader),
-                           average_train_loss, valid_loss))
+            .format(epoch + 1, self.num_epochs, global_step,
+                    self.num_epochs * len(self.train_loader),
+                    average_train_loss, valid_loss))
 
       # Save model and results in checkpoint.
       if self.best_valid_loss > valid_loss:
@@ -293,7 +284,7 @@ class Trainer:
     logging.info(
       f'Loaded best model (with validation loss {valid_loss}) for testing.')
 
-    logging.info('Start testing.')
+    logging.info('______________________Start testing__________________________________.')
 
     test_loss, predictions, true_vals, true_points, pred_points = self.evaluate(
       validation_set=False)
@@ -329,7 +320,6 @@ def infer_text(model: torch.nn.Module, text: str):
     return model.text_embed(text)
 
 
-
 def ensure_shared_grads(model):
   list_not_learned = []
   list_learned = []
@@ -339,6 +329,5 @@ def ensure_shared_grads(model):
     if param.grad is not None:
       list_learned.append(name)
 
-  # print(f"{len(list_learned)} Learned params: {','.join(list_learned)}")
+  print(f"{len(list_learned)} Learned params: {','.join(list_learned)}")
   print(f"{len(list_not_learned)} Un-Learned params: {','.join(list_not_learned)}")
-

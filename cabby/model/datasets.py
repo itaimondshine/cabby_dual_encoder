@@ -31,7 +31,8 @@ from cabby.geo import regions
 from cabby.geo import util as gutil
 from cabby.model import dataset_item
 from cabby.model import util
-from transformers import DistilBertTokenizerFast, T5Tokenizer, BertForSequenceClassification, BertTokenizerFast
+from transformers import DistilBertTokenizerFast, T5Tokenizer, BertForSequenceClassification, BertTokenizerFast, \
+  BertTokenizer
 
 MODELS = [
   'Dual-Encoder-Bert',
@@ -53,7 +54,7 @@ MODELS = [
 ]
 
 T5_TYPE = "t5-small"
-BERT_TYPE = 'onlplab/alephbert-base'
+BERT_TYPE = 'bert-base-multilingual-cased'
 
 FAR_DISTANCE_THRESHOLD = 2000  # Minimum distance between far cells in meters.
 
@@ -63,6 +64,19 @@ DISTRIBUTION_SCALE_DISTANCE = 1000
 dprob = util.DistanceProbability(DISTRIBUTION_SCALE_DISTANCE)
 
 tokenizerT5 = T5Tokenizer.from_pretrained(T5_TYPE)
+
+
+def get_cells_embedding(cells: list) -> dict:
+  EMBEDDING_PATH = '/home/nlp/itaimond1/caby/cells_embedding_level_13_tel_aviv.npy'
+  cell_id_to_vector = np.load(EMBEDDING_PATH, allow_pickle=True).item()
+  vecs = []
+  for _id in cells:
+    if str(_id) not in cell_id_to_vector:
+      vecs.append(np.zeros(10))
+    else:
+      print(_id)
+      vecs.append(cell_id_to_vector[str(_id)])
+  return vecs
 
 
 class Dataset:
@@ -97,14 +111,13 @@ class Dataset:
     self.train = None
     self.valid = None
     self.test = None
-
     self.set_tokenizers()
 
   def set_tokenizers(self):
     assert self.model_type in MODELS
     if self.model_type in ['Dual-Encoder-Bert', 'Classification-Bert']:
-      self.text_tokenizer = BertTokenizerFast.from_pretrained(BERT_TYPE)
-      self.s2_tokenizer = util.binary_representation
+      self.text_tokenizer = BertTokenizer.from_pretrained(BERT_TYPE)
+      self.s2_tokenizer = get_cells_embedding
 
   def tokenize_cell(self, list_cells):
     if isinstance(list_cells[0], list):
@@ -123,24 +136,6 @@ class Dataset:
       labels, padding=True, truncation=True).input_ids
 
 
-
-
-  def get_cells_embedding(self, cells: list) -> torch.Tensor:
-    EMBEDDING_PATH = '/home/nlp/itaimond1/caby/cells_embedding_tel_aviv.npy'
-    cell_id_to_vector = np.load(EMBEDDING_PATH, allow_pickle=True).item()
-    vecs = []
-    for _id in cells:
-      if str(_id) not in cell_id_to_vector:
-
-        vecs.append(np.zeros(10))
-      else:
-        print(_id)
-        vecs.append(cell_id_to_vector[str(_id)])
-    return torch.tensor(vecs)
-
-
-
-
   def create_dataset(
 
     self, infer_only: bool = False, is_dist: bool = False,
@@ -155,7 +150,7 @@ class Dataset:
     unique_cells_df = pd.DataFrame({'point': points, 'cellid': self.unique_cellid})
     self.cellid_to_coord, self.coord_to_cellid = {}, {}
 
-    tens_cells = self.get_cells_embedding(unique_cells_df.cellid.tolist())
+    tens_cells = get_cells_embedding(unique_cells_df.cellid.tolist())
 
     # Create RUN dataset.
     train_dataset = None

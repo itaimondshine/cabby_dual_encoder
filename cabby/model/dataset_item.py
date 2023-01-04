@@ -34,7 +34,7 @@ import attr
 
 from cabby.geo import util as gutil
 from cabby.model import util
-from util import far_cellid
+from cabby.geo.util import far_cellid
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -58,7 +58,7 @@ class TextGeoDataset:
   valid: Any = attr.ib()
   test: Any = attr.ib()
   unique_cellids: np.ndarray = attr.ib()
-  encoded_cells: torch.tensor = attr.ib()
+  unique_cellids_binary: torch.tensor = attr.ib()
   label_to_cellid: Dict[int, int] = attr.ib()
   coord_to_cellid: Dict[str, int] = attr.ib()
   graph_embed_size: int = attr.ib()
@@ -134,11 +134,10 @@ class TextGeoDataset:
     torch.save(dataset_text.valid, valid_path_dataset)
     torch.save(dataset_text.test, test_path_dataset)
     np.save(unique_cellid_path, dataset_text.unique_cellids)
-    torch.save(dataset_text.encoded_cells, tensor_cellid_path)
+    torch.save(dataset_text.unique_cellids_binary, tensor_cellid_path)
     np.save(label_to_cellid_path, dataset_text.label_to_cellid)
     np.save(coord_to_cellid_path, dataset_text.coord_to_cellid)
     np.save(graph_embed_size_path, graph_embed_size)
-
     logging.info("Saved data to ==> {}.".format(dataset_path))
 
 
@@ -178,21 +177,11 @@ class TextGeoSplit(torch.utils.data.Dataset):
     # Tokenize instructions.
 
     self.instruction_list = data.instructions.tolist()
-    if 'T5' in model_type:
-      # Add prompt
-      data.instructions = [model_type + ": " + t for t in self.instruction_list]
-      logging.info(data.instructions.iloc[0])
 
     self.encodings = self.text_tokenizer(data.instructions.tolist(), truncation=True, padding=True,
                                          add_special_tokens=True, max_length=200)
 
-    # Get a far cellid for given point
-
-    far_cells = data.end_point.apply(lambda end_point: far_cellid(end_point, unique_cells_df, 300))
-
-    data['far_cells'] = far_cells
-
-
+    data['far_cells'] = data.end_point.apply(lambda end_point: far_cellid(end_point, unique_cells_df, 300))
 
     cellids_array = np.array(data.cellid.tolist())
     neighbor_cells_array = np.array(data.neighbor_cells.tolist())
@@ -200,8 +189,7 @@ class TextGeoSplit(torch.utils.data.Dataset):
 
     self.end_point = data.end_point.apply(lambda x: gutil.tuple_from_point(x)).tolist()
 
-    # self.coords_end = data.cellid.apply(lambda x: cellid_to_coord[x]).tolist()
-
+    self.uniuqe_cells
     self.labels = data.cellid.apply(lambda x: cellid_to_label[x] if x in cellid_to_label else 0).tolist()
     data['labels'] = self.labels
 
@@ -244,32 +232,11 @@ class TextGeoSplit(torch.utils.data.Dataset):
 
     self.landmarks_dist_raw = []
 
-    # data['landmarks_cells'] = data.landmarks.apply(
-    #   lambda l: [gutil.cellid_from_point(x, self.s2level) for x in l])
 
-    # self.landmark_label = self.get_cell_to_lablel(data['landmarks_cells'].tolist())
-
-    # for s_p, lan_l, lan_p in zip(data.start_point.tolist(), self.landmark_label, data.landmarks.tolist()):
-    #   landmark_dist_cur = []
-    #   for e_p, l in zip(lan_p, lan_l.split(";")):
-    #     dist = round(gutil.get_distance_between_points(s_p, e_p))
-    #     landmark_dist_cur.append(f"{l}; distance: {dist}")
-    #
-    #   self.landmarks_dist_raw.append('; '.join(landmark_dist_cur))
-    #
-    #
-    #
-    #
-    #
-    #   self.prob = self.prob.tolist()
-    #
-    print("here")
-    print(data['neighbor_cells'])
-    self.set_generation_model(data)
 
     del self.graph_embed_file
     # del self.start_point_cells
-    del self.s2_tokenizer
+
     del self.text_tokenizer
 
   def get_cell_to_lablel(self, list_cells):
@@ -442,18 +409,16 @@ class TextGeoSplit(torch.utils.data.Dataset):
     neighbor_cells = torch.tensor(self.neighbor_cells[idx])
     far_cells = torch.tensor(self.far_cells[idx])
     cellid = torch.tensor(self.cellids[idx])
-    encoded_cell = torch.tensor(self.encoded_cells[idx])
+    # encoded_cell = torch.tensor(self.encoded_cells[idx])
     end_point = torch.tensor(self.end_point[idx])
-    if hasattr(self.text_input_tokenized, 'items'):
-      text_input = {key: torch.tensor(val[idx])
-                    for key, val in self.text_input_tokenized.items()}
-    else:
-      text_input = torch.tensor(self.text_input_tokenized[idx])
+    text_input = {key: torch.tensor(val[idx])
+                    for key, val in self.encodings.items()}
+
     graph_embed_start = self.graph_embed_start[idx]
     sample = {'text': text_input, 'cellid': cellid,
               'neighbor_cells': neighbor_cells, 'far_cells': far_cells,
               'end_point': end_point,
-              'encoded_cell' : encoded_cell,
+              # 'encoded_cell' : encoded_cell,
               'graph_embed_start': graph_embed_start
               }
 

@@ -62,16 +62,16 @@ from cabby.geo import regions
 DATA_DIR = '/home/nlp/itaimond1/caby/cabby/model/text/dataSamples/human'
 DATASET_DIR = '/home/nlp/itaimond1/caby/cabby/model/text/dataset_dir'
 REGION = 'Tel Aviv'
-S2_LEVEL = '14'
+S2_LEVEL = '13'
 MODEL = 'Dual-Encoder-Bert'
 GRAPH_EMBEDDING = ''
 INFER_ONLY = False
 TRAIN_BATCH_SIZE = 32
-TEST_BATCH_SIZE = 32
-DEV_BATCH_SIZE = 32
+TEST_BATCH_SIZE = 16
+DEV_BATCH_SIZE = 16
 MODEL_PATH = ''
 LEARNING_RATE = 0.01
-NUM_EPOCHS = 1
+NUM_EPOCHS = 5
 OUTPUT_DIR = '/home/nlp/itaimond1/caby/cabby/model/text/dataset_dir/output'
 
 
@@ -104,6 +104,7 @@ def main():
     if not os.path.exists(dataset_model_path):
       os.mkdir(dataset_model_path)
 
+
     print("Preprocessing dataset")
     dataset_text = dataset.create_dataset(
       infer_only=INFER_ONLY,
@@ -111,17 +112,15 @@ def main():
       far_cell_dist=2000,
     )
 
-    print(f'dataset_text: {dataset_item}')
-
-
-
     dataset_item.TextGeoDataset.save(
       dataset_text=dataset_text,
       dataset_path=dataset_path,
       graph_embed_size=dataset.graph_embed_size)
 
 
-  print(f'dataset_item: {dataset_text}')
+    print("Saveed dataset")
+
+  torch.cuda.empty_cache()
   n_cells = len(dataset_text.unique_cellids)
 
   train_loader = None
@@ -134,9 +133,7 @@ def main():
     test_loader = DataLoader(
       dataset_text.test, batch_size=DEV_BATCH_SIZE, shuffle=False)
 
-
-
-  device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+  device =  torch.device('cpu')
 
   if 'Dual-Encoder' in MODEL:
     run_model = models.DualEncoder(device=device, is_distance_distribution=False)
@@ -165,7 +162,7 @@ def main():
     test_loader=test_loader,
     unique_cells=dataset_text.unique_cellids,
     file_path=OUTPUT_DIR,
-    cells_tensor=dataset_text.unique_cellids_binary,
+    cells_tensor=torch.tensor(dataset_text.unique_cellids_binary),
     label_to_cellid=dataset_text.label_to_cellid,
     is_single_sample_train=False,
   )
@@ -185,6 +182,7 @@ def main():
 
   else:
     logging.info("Starting to train model.")
+    print("Starting to train model.")
     trainer.train_model()
 
 

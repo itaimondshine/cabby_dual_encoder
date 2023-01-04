@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="e7609e69-91e8-45ba-b010-d419f98b2d29" name="nlp4">
+        <fileTransfer accessType="SFTP" host="localhost" port="4005" sshConfigId="f350a897-3436-4843-8e1e-5ce26abe85c0" sshConfig="itaimond1@localhost:4005 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
