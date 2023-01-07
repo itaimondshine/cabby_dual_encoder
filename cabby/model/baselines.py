@@ -41,7 +41,7 @@ from cabby.evals import utils as eu
 from cabby.model import util
 from cabby.geo import regions
 
-TASKS = ["RVS", "RUN", "human"]
+TASKS = ["RVS", "RUN", "human_points"]
 
 FLAGS = flags.FLAGS
 
@@ -75,7 +75,7 @@ def main(argv):
     dataset_init = datasets.RVSDataset
   elif FLAGS.task == 'RUN':
     dataset_init = datasets.RUNDataset
-  elif FLAGS.task == 'human':
+  elif FLAGS.task == 'human_points':
     dataset_init = datasets.HumanDataset
   else:
     sys.exit("Dataset invalid")

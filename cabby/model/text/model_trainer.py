@@ -59,7 +59,7 @@ from cabby.geo import regions
 
 # Configure parameters.
 
-DATA_DIR = '/home/nlp/itaimond1/caby/cabby/model/text/dataSamples/human'
+DATA_DIR = '/home/nlp/itaimond1/caby/cabby/model/text/dataSamples/human_points'
 DATASET_DIR = '/home/nlp/itaimond1/caby/cabby/model/text/dataset_dir'
 REGION = 'Tel Aviv'
 S2_LEVEL = '13'

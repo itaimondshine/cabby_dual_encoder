@@ -7,7 +7,7 @@ MAP_DIR=$OUTPUT_DIR/map
 #OUTPUT_DIR_MODEL_RVS_FIXED_4=$OUTPUT_DIR_MODEL/rvs/fixed_4
 #OUTPUT_DIR_MODEL_RVS_FIXED_5=$OUTPUT_DIR_MODEL/rvs/fixed_5
 #
-#OUTPUT_DIR_MODEL_HUMAN=$OUTPUT_DIR_MODEL/human
+#OUTPUT_DIR_MODEL_HUMAN=$OUTPUT_DIR_MODEL/human_points
 #
 
 
@@ -50,4 +50,4 @@ mkdir -p $OUTPUT_DIR_MODEL_HUMAN
 cabby/model/text/model_trainer.py  --data_dir /Users/itaimondshine/Desktop/Study/pasten/cabby/cabby/cabby/model/text/dataSamples/girit   --dataset_dir /Users/itaimondshine/Desktop/Study/pasten/cabby/cabby/cabby/model/text/dataset_dir --region 'Tel Aviv' --s2_level 16 text/dataset_dir --num_epochs 1 --train_batch_size 100 --task human --model  Classification-Bert
 
 # Dual encoder
-#bazel-bin/cabby/model/text/model_trainer  --data_dir ~/cabby/cabby/model/text/dataSamples/human --dataset_dir $OUTPUT_DIR_MODEL_HUMAN --region Manhattan --s2_level 15 --output_dir $OUTPUT_DIR_MODEL_HUMAN --num_epochs 1 --task human --model Dual-Encoder-Bert
+#bazel-bin/cabby/model/text/model_trainer  --data_dir ~/cabby/cabby/model/text/dataSamples/human_points --dataset_dir $OUTPUT_DIR_MODEL_HUMAN --region Manhattan --s2_level 15 --output_dir $OUTPUT_DIR_MODEL_HUMAN --num_epochs 1 --task human_points --model Dual-Encoder-Bert

@@ -295,9 +295,9 @@ def get_geofenced_wikidata_relations(region: Region,
       place: wikidata item corresponding to place within the region
       p: wikidata property extracted from the place
       instance: value of the property p
-      instanceLabel: human-readable version of instance
-      placeLabel: human-readable version of place
-      propLabel: human-readable version of p
+      instanceLabel: human_points-readable version of instance
+      placeLabel: human_points-readable version of place
+      propLabel: human_points-readable version of p
   '''
   query_result = query_api(create_relation_query_from_region(region)
                            % get_filter_string(place_filter))
