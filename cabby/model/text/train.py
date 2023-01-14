@@ -90,23 +90,19 @@ class Trainer:
         text = {key: val.to(self.device) for key, val in batch['text'].items()}
         cellids = batch['cellid'].float().to(self.device)
 
-        is_print = False
-        if batch_idx == 0:
-          is_print = True
         batch = {k: v.to(self.device) for k, v in batch.items() if torch.is_tensor(v)}
         labels = self.train_loader.dataset.labels[batch_idx * 100: batch_idx * 100 + 100]
 
         loss = self.model(
           text,
           cellids,
-          is_print,
           batch
         )
 
         loss_val_total += loss.item()
         # print(f'before the predictions {text}, {cellids}, {self.label_to_cellid}, {batch}')
         predictions = self.model.predict(
-          text, is_print, self.cells_tensor, self.label_to_cellid, batch)
+          text, self.cells_tensor, self.label_to_cellid, batch)
         # print(f'predictions in evaluation step: {predictions}')
         predictions_list.append(predictions)
         labels = labels
@@ -145,14 +141,9 @@ class Trainer:
         batch = {k: v.to(self.device) for k, v in batch.items() if torch.is_tensor(v)}
         # labels = self.train_loader.dataset.labels[batch_idx * 100 : batch_idx * 100 + 100]
 
-        is_print = False
-        if epoch == 0 and batch_idx == 0:
-          is_print = True
-
         loss = self.model(
           text,
           cellids,
-          is_print,
           batch
         )
 
@@ -220,7 +211,6 @@ class Trainer:
     # Training loop.
     self.model.train()
 
-    is_print = False
     for epoch in range(self.num_epochs):
       running_loss = 0.0
       logging.info("Epoch number: {}".format(epoch))
@@ -238,7 +228,6 @@ class Trainer:
           loss += self.model(
             text,
             cellids,
-            is_print,
             batch
           )
 
