@@ -49,6 +49,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from transformers import AdamW
 
+
 from cabby.evals import utils as eu
 from cabby.model.text import train
 from cabby.model import dataset_item
@@ -136,7 +137,7 @@ def main():
   device =  torch.device('cpu')
 
   if 'Dual-Encoder' in MODEL:
-    run_model = models.DualEncoder(device=device, is_distance_distribution=False)
+    run_model = models.DualEncoder(device=device)
   else:
     run_model = models.ClassificationModel(n_cells, device=device)
 
