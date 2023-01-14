@@ -37,23 +37,8 @@ from transformers import DistilBertTokenizerFast, T5Tokenizer, BertForSequenceCl
 MODELS = [
   'Dual-Encoder-Bert',
   'Classification-Bert',
-  'S2-Generation-T5',
-  'S2-Generation-T5-Landmarks',
-  'S2-Generation-T5-Warmup-start-end',
-  'Text-2-Landmarks-NER-Generation-T5-Warmup',
-  'Landmarks-NER-2-S2-Generation-T5-Warmup',
-  'S2-Generation-T5-Path',
-  'S2-Generation-T5-start-text-input',
-  'S2-Generation-T5-Warmup-cell-embed-to-cell-label',
-  'S2-Generation-T5-start-embedding-text-input',
-  'S2-Generation-T5-Warmup-start-end-to-dist',
-  'S2-Generation-T5-text-start-to-end-dist',
-  'S2-Generation-T5-text-start-to-landmarks-dist',
-  'S2-Generation-T5-text-start-embedding-to-landmarks',
-  'S2-Generation-T5-text-start-embedding-to-landmarks-dist'
 ]
 
-T5_TYPE = "t5-small"
 BERT_TYPE = 'bert-base-multilingual-cased'
 
 FAR_DISTANCE_THRESHOLD = 2000  # Minimum distance between far cells in meters.
@@ -62,8 +47,6 @@ FAR_DISTANCE_THRESHOLD = 2000  # Minimum distance between far cells in meters.
 # scale in meters for the distribution.
 DISTRIBUTION_SCALE_DISTANCE = 1000
 dprob = util.DistanceProbability(DISTRIBUTION_SCALE_DISTANCE)
-
-tokenizerT5 = T5Tokenizer.from_pretrained(T5_TYPE)
 
 
 def get_cells_embedding(cells: list) -> dict:
@@ -118,22 +101,6 @@ class Dataset:
     if self.model_type in ['Dual-Encoder-Bert', 'Classification-Bert']:
       self.text_tokenizer = BertTokenizer.from_pretrained(BERT_TYPE)
       self.s2_tokenizer = get_cells_embedding
-
-  def tokenize_cell(self, list_cells):
-    if isinstance(list_cells[0], list):
-      labels = []
-      for c_list in list_cells:
-        list_lables = []
-        for c in c_list:
-          list_lables.append(self.cellid_to_coord[c])
-
-        labels.append('; '.join(list_lables))
-
-    else:
-      labels = [util.get_valid_cell_label(self.cellid_to_coord, c) for c in list_cells]
-
-    return tokenizerT5(
-      labels, padding=True, truncation=True).input_ids
 
 
   def create_dataset(
