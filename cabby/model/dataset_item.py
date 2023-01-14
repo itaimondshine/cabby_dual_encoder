@@ -28,8 +28,6 @@ import swifter
 from typing import Any, Dict, Text, Tuple
 import torch
 
-import mapply
-
 import attr
 
 from cabby.geo import util as gutil
@@ -37,11 +35,6 @@ from cabby.model import util
 from cabby.geo.util import far_cellid
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-mapply.init(
-  n_workers=-1,
-  progressbar=True,
-)
 
 
 @attr.s
@@ -189,16 +182,10 @@ class TextGeoSplit(torch.utils.data.Dataset):
 
     self.end_point = data.end_point.apply(lambda x: gutil.tuple_from_point(x)).tolist()
 
-    self.uniuqe_cells
     self.labels = data.cellid.apply(lambda x: cellid_to_label[x] if x in cellid_to_label else 0).tolist()
     data['labels'] = self.labels
 
-    # self.start_cells = data.start_point.apply(
-    #   lambda x: gutil.cellid_from_point(x, s2level))
-
-    # self.coords_start = self.start_cells.apply(lambda x: cellid_to_coord[x]).tolist()
-
-    # self.start_point_labels = self.get_cell_to_lablel(self.start_cells.tolist())
+ 
 
     self.cellids = self.s2_tokenizer(cellids_array)
 
@@ -206,9 +193,6 @@ class TextGeoSplit(torch.utils.data.Dataset):
 
     self.far_cells = self.s2_tokenizer(far_cells_array)
 
-    # self.start_text_input_list = [
-    #   str(i).replace(':', f': Start at {str(s)}.') for s, i in zip(
-    #     self.start_point_labels, data.instructions.tolist())]
 
     if graph_embed_file:
       self.graph_embed_end = data['cellid'].apply(
@@ -255,147 +239,6 @@ class TextGeoSplit(torch.utils.data.Dataset):
 
     return labels
 
-  def set_generation_model(self, data):
-
-    function_name = f"set_{self.model_type.replace('-', '_')}"
-    logging.info(f"Running function: {function_name}")
-    set_data_func = getattr(self, function_name)
-    input_text, output_text = set_data_func(data)
-
-    self.print_sample(
-      mode_expected=self.model_type,
-      input=input_text[0],
-      output=output_text[0])
-
-    if 'T5' not in self.model_type:
-      self.text_output_tokenized = output_text
-      self.text_input_tokenized = input_text
-      return
-    self.text_output_tokenized = self.text_tokenizer(
-      output_text, truncation=True, padding=True, add_special_tokens=True).input_ids
-
-    self.text_input_tokenized = self.text_tokenizer(
-      input_text, truncation=True, padding='max_length', add_special_tokens=True, max_length=200)
-
-  def set_S2_Generation_T5_text_start_to_landmarks_dist(self, data):
-
-    return self.start_text_input_list, self.landmarks_dist_raw
-
-  def set_S2_Generation_T5_text_start_to_end_dist(self, data):
-
-    self.end_dist_raw = [f"{e_l} distance: {round(gutil.get_distance_between_points(s_p, e_p))}"
-                         for e_l, e_p, s_p in zip(
-        self.coords_end, self.end_point, data.start_point)]
-
-    return self.start_text_input_list, self.end_dist_raw
-
-  def set_S2_Generation_T5_start_embedding_text_input(self, data):
-
-    return self.start_text_input_list, self.coords_end
-
-  def set_S2_Generation_T5_start_text_input(self, data):
-
-    return self.start_text_input_list, self.coords_end
-
-  def set_S2_Generation_T5_Landmarks(self, data):
-    assert 'T5' in self.model_type and 'landmarks' in data, "Landmarks not processed"
-
-    return data.instructions.tolist(), self.landmark_label
-
-  def set_Landmarks_NER_2_S2_Generation_T5_Warmup(self, data):
-    assert ('T5' in self.model_type and 'landmarks_ner_and_point' in data)
-
-    landmarks_ner_input = [
-      f"{self.model_type}: {ner}" for ner, point in data.landmarks_ner_and_point.tolist()]
-
-    data = data.assign(landmarks_ner_and_prompt_input=landmarks_ner_input)
-
-    landmark_cells = [
-      gutil.cellid_from_point(
-        point, self.s2level) for ner, point in data.landmarks_ner_and_point.tolist()]
-
-    landmark_label = self.get_cell_to_lablel(landmark_cells)
-
-    return data.landmarks_ner_and_prompt_input.tolist(), landmark_label
-
-  def set_Text_2_Landmarks_NER_Generation_T5_Warmup(self, data):
-    assert 'landmarks_ner' in data, "Landmarks NER not processed"
-    return data.instructions.tolist(), data.landmarks_ner.tolist()
-
-  def set_S2_Generation_T5_Warmup_start_end_to_dist(self, data):
-
-    dists_start_end = [
-      f"Distance: {round(gutil.get_distance_between_points(s, e))}" for s, e in zip(
-        self.end_point, data.start_point)]
-
-    start_end_point_list_raw = [
-      f"{self.model_type}: {str(e)}, {str(s)}" for s, e in zip(
-        self.start_point_labels, self.coords_end)]
-
-    return start_end_point_list_raw, dists_start_end
-
-  def set_S2_Generation_T5_Warmup_start_end(self, data):
-
-    assert 'T5' in self.model_type and 'route' in data, "Route not processed"
-
-    start_end_point_list_raw = [
-      f"{self.model_type}: {str(e)}, {str(s)}" for s, e in zip(
-        self.start_point_labels, self.coords_end)]
-
-    data['route_fixed'] = data.route_fixed.apply(
-      lambda l: [gutil.cellid_from_point(x, self.s2level) for x in l])
-
-    route_fixed_label = self.get_cell_to_lablel(data.route_fixed.tolist())
-
-    return start_end_point_list_raw, route_fixed_label
-
-  def set_S2_Generation_T5(self, data):
-    return data.instructions.tolist(), self.coords_end
-
-  def set_S2_Generation_T5_Path(self, data):
-
-    assert 'T5' in self.model_type and 'route' in data, "Route not processed"
-
-    data['route'] = data.route.apply(
-      lambda l: [gutil.cellid_from_point(x, self.s2level) for x in l])
-
-    route_label = self.get_cell_to_lablel(data.route.tolist())
-
-    self.route = self.text_tokenizer(
-      route_label, truncation=True, padding=True, add_special_tokens=True).input_ids
-
-    return data.instructions.tolist(), route_label
-
-  def set_S2_Generation_T5_text_start_embedding_to_landmarks_dist(self, data):
-    return self.start_text_input_list, self.landmarks_dist_raw
-
-  def set_S2_Generation_T5_text_start_embedding_to_landmarks(self, data):
-    return self.start_text_input_list, self.landmark_label
-
-  def set_S2_Generation_T5_Warmup_cell_embed_to_cell_label(self, data):
-
-    return [self.model_type] * len(self.coords_start), self.coords_start
-
-  def set_Classification_Bert(self, data):
-
-    return self.encodings, self.cellids
-
-  def set_Dual_Encoder_Bert(self, data):
-    return self.encodings, self.cellids
-
-  def print_sample(self, mode_expected, input, output):
-
-    assert 'T5' not in mode_expected or mode_expected in input, \
-      f"mode_expected: {mode_expected} \n input: {input}"
-
-    if self.model_type == mode_expected:
-      logging.info(
-        f"\n Example {self.model_type}: \n" +
-        f"  Input: '{input}'\n" +
-        f"  Output: {output}\n"
-
-      )
-
   def __getitem__(self, idx: int):
     '''Supports indexing such that TextGeoDataset[i] can be used to get
     i-th sample.
@@ -426,16 +269,3 @@ class TextGeoSplit(torch.utils.data.Dataset):
 
   def __len__(self):
     return len(self.cellids)
-
-  def calc_dist(self, start_point_cell, dist_matrix):
-
-    label = self.cellid_to_label[start_point_cell]
-
-    dists = dist_matrix[label]
-
-    return dists
-
-
-def coord_format(coord):
-  x, y = coord
-  return f'loc_{x} loc_{y}'
